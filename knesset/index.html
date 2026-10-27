@@ -1,0 +1,1982 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Knesset 2026 Market Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Rubik:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* Layout: masthead strip, hero (headline odds + hemicycle), then a stacked column of instrument panels. */
+:root{
+  --bg:#f3f5fa; --surface:#ffffff; --sunk:#e9edf5; --ink:#0f1a2e; --muted:#5b6782; --line:#d9e0ec;
+  --accent:#0038b8; --accent-soft:#dfe7fb; --up:#0d8a5f; --down:#c23b4e;
+  --bibi:#2f5fd0; --opp:#0f9d73; --arab:#e08a2e; --other:#a39b8f;
+  --f-display:"Frank Ruhl Libre", Georgia, "Times New Roman", serif;
+  --f-body:"Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0a0f1c; --surface:#111a2d; --sunk:#0d1526; --ink:#e7ecf6; --muted:#93a0bb; --line:#22304b;
+    --accent:#7aa2ff; --accent-soft:#1a2a50; --up:#3fcf95; --down:#ff7a8c;
+    --bibi:#5b88f0; --opp:#2cc193; --arab:#f0a04a; --other:#b3ab9f;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0a0f1c; --surface:#111a2d; --sunk:#0d1526; --ink:#e7ecf6; --muted:#93a0bb; --line:#22304b;
+  --accent:#7aa2ff; --accent-soft:#1a2a50; --up:#3fcf95; --down:#ff7a8c;
+  --bibi:#5b88f0; --opp:#2cc193; --arab:#f0a04a; --other:#b3ab9f;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.num,.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;font-weight:700;letter-spacing:-.01em}
+h2{font-size:1.45rem}
+.eyebrow{font:500 .7rem/1.2 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+a{color:var(--accent)}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* masthead */
+.mast{border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:0;z-index:20}
+.mast .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;padding-block:12px}
+.brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
+.brand h1{font-size:1.35rem;font-weight:900}
+.brand .he{font-family:var(--f-display);color:var(--muted);font-size:1.05rem}
+.status{display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--muted)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--up);box-shadow:0 0 0 0 var(--up)}
+.dot.live{animation:pulse 2s infinite}
+.dot.err{background:var(--down);animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--up) 60%,transparent)}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@media (prefers-reduced-motion:reduce){.dot.live{animation:none}}
+.mstat{font-size:.82rem;color:var(--muted)}
+.polls{display:flex;align-items:baseline;gap:8px;padding:4px 12px;border-radius:999px;background:var(--accent-soft);font-size:.78rem;color:var(--muted)}
+.polls b{font:500 1.05rem var(--f-mono);color:var(--accent);font-variant-numeric:tabular-nums}
+.polls.closed{background:color-mix(in srgb,var(--down) 14%,var(--surface))}
+.polls.closed b{color:var(--down)}
+.mstat b{color:var(--ink);font-family:var(--f-mono);font-weight:500}
+
+main{display:grid;gap:22px;padding-block:22px 60px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px;min-width:0}
+.phead{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 16px;margin-bottom:14px}
+.phead p{margin:4px 0 0;color:var(--muted);font-size:.88rem;max-width:68ch}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:22px}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:22px}
+@media (max-width:900px){.hero{grid-template-columns:1fr}}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:12px}
+
+/* PM hero */
+.pm{display:grid;grid-template-columns:minmax(200px,310px) minmax(0,1fr);gap:30px;align-items:start}
+@media (max-width:720px){.pm{grid-template-columns:1fr}.pm-portrait{max-width:300px}}
+.pm-portrait{margin:0;position:relative;aspect-ratio:4/5;border-radius:12px;overflow:hidden;background:var(--sunk);box-shadow:0 0 0 1px var(--line)}
+.pm-portrait img{width:100%;height:100%;object-fit:cover;display:block}
+.pm-portrait::after{content:"";position:absolute;inset:auto 0 0 0;height:45%;background:linear-gradient(to top,var(--pmc,#000),transparent);opacity:.9}
+.pm-cap{position:absolute;left:14px;right:14px;bottom:12px;z-index:1;color:#fff;font:600 .8rem/1.3 var(--f-body);letter-spacing:.06em;text-transform:uppercase;text-shadow:0 1px 2px rgba(0,0,0,.4)}
+.pm-name{font-size:clamp(2.2rem,5.5vw,3.9rem);font-weight:900;line-height:1;margin-top:8px}
+.pm-role{color:var(--muted);margin-top:8px;font-size:.95rem}
+.pm-odds{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-top:16px}
+.pm-pct{font:900 clamp(3.4rem,9vw,5.8rem)/.85 var(--f-display);font-variant-numeric:tabular-nums}
+.pm-oddsmeta{display:grid;gap:4px;font-size:.82rem;color:var(--muted);padding-bottom:4px}
+.pm-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:20px;border-top:1px solid var(--line);padding-top:14px}
+.pm-facts b{display:block;font:700 1.55rem/1.1 var(--f-display)}
+.pm-facts span{font-size:.76rem;color:var(--muted)}
+.pm-platform{margin-top:20px}
+.pm-platform ul{margin:8px 0 0;padding-left:18px;display:grid;gap:6px;max-width:72ch}
+.pm-src{font-size:.74rem;color:var(--muted);margin-top:10px}
+.pm-rivals{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:10px;margin-top:24px}
+.rival{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface);cursor:pointer;text-align:left;min-width:0}
+.rival:hover{background:var(--sunk)}
+.rival[aria-pressed="true"]{border-color:var(--ink)}
+.rival img{width:42px;height:42px;border-radius:50%;object-fit:cover;flex:none;background:var(--sunk)}
+.rival .rtxt{display:grid;min-width:0}
+.rival .rn{font-weight:500;font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rival .rp{font:500 .8rem var(--f-mono)}
+.pm-divider{margin:26px 0 12px;border-top:1px solid var(--line);padding-top:14px}
+
+/* coalitions */
+.coal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:22px}
+.coal-h{font-family:var(--f-body);font-size:.95rem;font-weight:600;margin-bottom:10px}
+.coal-list{display:grid;gap:10px}
+.coal{border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;gap:8px;min-width:0}
+.coal-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.coal-name{font-weight:600}
+.coal-p{font:700 1.5rem/1 var(--f-display);white-space:nowrap}
+.coal-p small{font:400 .7rem var(--f-body);color:var(--muted);margin-left:4px}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-size:.72rem;padding:2px 8px;border-radius:999px;border:1px solid var(--line);display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.chip.ext{border-style:dashed;color:var(--muted)}
+.coal-bar{position:relative;height:12px;background:var(--sunk);border-radius:3px;overflow:hidden;display:flex}
+.coal-bar span{height:100%}
+.coal-bar span.ext{opacity:.4}
+.coal-bar .m61{position:absolute;left:calc(61 / 120 * 100%);top:-2px;bottom:-2px;width:2px;background:var(--ink)}
+.coal-meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.78rem;color:var(--muted)}
+.coal-meta b{font-family:var(--f-mono);font-weight:500;color:var(--ink)}
+.coal-note{font-size:.78rem;color:var(--muted)}
+
+/* velocity */
+.vel-head{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-top:18px;border-top:1px solid var(--line);padding-top:14px;margin-bottom:8px}
+.chartbox.vel{height:190px}
+.velctl{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:.78rem;color:var(--muted)}
+.velctl input,.velctl select{font:inherit;font-size:.8rem;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:5px 7px}
+.velctl input{width:84px;font-family:var(--f-mono)}
+.vel-tag{font-size:.72rem}
+
+/* arbitrage scanner */
+.verdict{display:inline-block;font:500 .7rem/1 var(--f-body);padding:5px 8px;border-radius:999px;white-space:nowrap}
+.verdict.arb{background:color-mix(in srgb,var(--up) 20%,transparent);color:var(--up)}
+.verdict.cross{background:color-mix(in srgb,var(--arab) 22%,transparent);color:var(--arab)}
+.verdict.no{background:var(--sunk);color:var(--muted)}
+#arbTable td{vertical-align:top}
+#arbTable tr.explain td{border-top:0;padding-top:0;font-size:.8rem;color:var(--muted)}
+#arbTable tr.has-explain td{border-bottom:0}
+.legs{font:400 .74rem var(--f-mono);color:var(--muted);margin-top:3px}
+.ret{font:700 1.05rem var(--f-display)}
+.ret.pos{color:var(--up)}.ret.neg{color:var(--muted)}
+@media (max-width:460px){.tiles{grid-template-columns:1fr}}
+.tile{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--surface);display:flex;flex-direction:column;gap:6px;min-width:0}
+.tile .big{font:700 2.3rem/1 var(--f-display)}
+.tile .who{font-weight:600;font-size:1.02rem}
+.tile .sub{font-size:.8rem;color:var(--muted)}
+.chg{font:500 .76rem var(--f-mono);white-space:nowrap}
+.chg.up{color:var(--up)}.chg.down{color:var(--down)}
+.runner{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:.82rem;color:var(--muted);border-top:1px dashed var(--line);padding-top:6px}
+.runner > span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.runner .num{white-space:nowrap}
+
+.hemi-wrap{display:flex;flex-direction:column;gap:12px}
+.hemi{width:100%;max-width:620px;margin:0 auto;display:block}
+.hemi-center{font-family:var(--f-display)}
+.blocbar{position:relative;display:flex;height:26px;border-radius:4px;overflow:hidden;background:var(--sunk)}
+.blocbar span{display:block;height:100%}
+.blocbar .mid{position:absolute;left:50%;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
+.bloclegend{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 14px;font-size:.84rem}
+.bloclegend b{font-family:var(--f-mono);font-weight:500}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.partykey{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.78rem;color:var(--muted);justify-content:center}
+
+/* tabs & controls */
+.seg{display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--sunk);padding:3px;border-radius:7px}
+.seg button{border:0;background:transparent;padding:5px 10px;border-radius:5px;font-size:.8rem;cursor:pointer;color:var(--muted)}
+.seg .seglab{align-self:center;padding:0 6px 0 8px;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.tabs button{border:1px solid var(--line);background:var(--surface);padding:5px 11px;border-radius:999px;font-size:.8rem;cursor:pointer}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.chartbox{position:relative;height:340px}
+@media (max-width:600px){.chartbox{height:260px}}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:12px;font-size:.84rem}
+.legend .li{display:flex;align-items:center;gap:6px}
+.legend .li b{font-family:var(--f-mono);font-weight:500}
+.loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.85rem;pointer-events:none}
+
+/* tables */
+.tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:.86rem}
+th{font:500 .68rem/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.r,th.r{text-align:right}
+tr.click{cursor:pointer}
+tr.click:hover td{background:var(--sunk)}
+.pname{display:flex;align-items:center;gap:8px;font-weight:500;white-space:nowrap}
+.pill{display:inline-block;font:500 .68rem/1 var(--f-body);letter-spacing:.04em;padding:4px 7px;border-radius:999px;white-space:nowrap}
+.pill.bibi{background:color-mix(in srgb,var(--bibi) 16%,transparent);color:var(--bibi)}
+.pill.opp{background:color-mix(in srgb,var(--opp) 16%,transparent);color:var(--opp)}
+.pill.arab{background:color-mix(in srgb,var(--arab) 18%,transparent);color:var(--arab)}
+.pill.other{background:color-mix(in srgb,var(--other) 22%,transparent);color:var(--muted)}
+.seatnum{font:700 1.15rem var(--f-display)}
+.whisk{position:relative;height:22px;min-width:220px}
+.whisk .axis{position:absolute;left:0;right:0;top:50%;height:1px;background:var(--line)}
+.whisk .rng{position:absolute;top:calc(50% - 3px);height:6px;border-radius:3px;opacity:.35}
+.whisk .pt{position:absolute;top:calc(50% - 6px);width:12px;height:12px;border-radius:50%;margin-left:-6px;border:2px solid var(--surface)}
+.whisk .err{position:absolute;top:calc(50% - 8px);height:16px;border-radius:5px;border:1.5px solid var(--ink);opacity:.5}
+.errcell{white-space:nowrap}
+.errcell .thin{color:var(--down)}
+.ig-wrap{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:26px;align-items:start}
+@media (max-width:860px){.ig-wrap{grid-template-columns:minmax(0,1fr)}}
+.ig-groups{display:grid;gap:14px;min-width:0}
+.ig-gh{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--bc);padding-bottom:3px;margin-bottom:4px}
+.ig-gh .eyebrow{color:var(--bc)}
+.ig-colh{display:grid;grid-template-columns:minmax(96px,150px) minmax(0,1fr) 54px 58px 44px;gap:10px;font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.ig-row{display:grid;grid-template-columns:minmax(96px,150px) minmax(0,1fr) 54px 58px 44px;gap:10px;align-items:center;padding:4px 0;font-size:.84rem}
+.ig-row .r,.ig-colh .r{text-align:right}
+.ig-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ig-track{position:relative;height:14px;background:var(--sunk);border-radius:4px}
+.ig-band{position:absolute;top:0;bottom:0;opacity:.3;border-radius:4px}
+.ig-fill{position:absolute;left:0;top:3px;bottom:3px;border-radius:3px}
+.ig-cond{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;background:var(--ink);opacity:.75}
+.ig-stats{display:grid;gap:12px}
+.ig-stat{border-top:1px solid var(--line);padding-top:8px;display:grid;gap:3px}
+.ig-stat b{font:700 1.55rem var(--f-display);line-height:1.1}
+.ig-stat .lab{font-size:.8rem;font-weight:500}
+.ig-stat .sub{font-size:.76rem;color:var(--muted)}
+.whisk .thr{position:absolute;top:2px;bottom:2px;width:1px;border-left:1px dashed var(--muted);opacity:.7}
+.wscale{position:relative;height:14px;min-width:220px;font:400 .66rem var(--f-mono);color:var(--muted)}
+.wscale span{position:absolute;transform:translateX(-50%)}
+.spark{display:block}
+
+/* bars */
+.ladder{display:grid;gap:7px}
+.lrow{display:grid;grid-template-columns:minmax(90px,1.2fr) 2fr auto;gap:10px;align-items:center;font-size:.84rem}
+.lrow .lab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lbar{height:10px;background:var(--sunk);border-radius:2px;overflow:hidden}
+.lbar span{display:block;height:100%;border-radius:2px}
+.lval{font-family:var(--f-mono);text-align:right;min-width:92px;white-space:nowrap}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr));gap:16px}
+.card{border:1px solid var(--line);border-radius:8px;padding:14px;min-width:0}
+.card h3{font-family:var(--f-body);font-size:.92rem;font-weight:600;margin-bottom:10px}
+
+.cmp{display:grid;gap:10px}
+.crow{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,2fr) auto;gap:12px;align-items:center;font-size:.86rem;padding-bottom:10px;border-bottom:1px solid var(--line)}
+@media (max-width:600px){.crow{grid-template-columns:1fr;gap:6px}}
+.cbars{display:grid;gap:4px}
+.cbar{display:grid;grid-template-columns:52px 1fr 48px;gap:8px;align-items:center;font-size:.74rem;color:var(--muted)}
+.cbar .lbar{height:8px}
+.cbar .v{font-family:var(--f-mono);text-align:right;color:var(--ink)}
+.gap{font:500 .78rem var(--f-mono);padding:3px 7px;border-radius:4px;background:var(--sunk);white-space:nowrap}
+
+.hist{width:100%;height:auto;display:block}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:14px}
+.kv div{border-top:1px solid var(--line);padding-top:8px}
+.kv b{display:block;font:700 1.5rem var(--f-display)}
+.kv span{font-size:.78rem;color:var(--muted)}
+
+details.ev{border-top:1px solid var(--line)}
+details.ev summary{cursor:pointer;padding:10px 2px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;list-style:none}
+details.ev summary::-webkit-details-marker{display:none}
+details.ev summary::before{content:"▸";color:var(--muted);font-size:.8rem}
+details.ev[open] summary::before{content:"▾"}
+details.ev summary .t{font-weight:500;margin-right:auto}
+details.ev summary .m{font:400 .76rem var(--f-mono);color:var(--muted)}
+.search{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:6px;padding:7px 10px;font:inherit;font-size:.85rem;width:min(100%,280px)}
+.method{font-size:.88rem;color:var(--muted);max-width:78ch}
+.method p{margin:.5em 0}
+.method b{color:var(--ink)}
+.err-banner{background:color-mix(in srgb,var(--down) 14%,var(--surface));border:1px solid var(--down);color:var(--ink);border-radius:8px;padding:10px 14px;font-size:.88rem}
+</style>
+</head>
+<body>
+<header class="mast">
+  <div class="wrap">
+    <div class="brand"><h1>Knesset 2026</h1><span class="he" lang="he" dir="rtl">הכנסת ה־26</span><span class="eyebrow">Market-implied results</span></div>
+    <div class="polls" id="polls" title="Polling stations close at 22:00 Israel time (20:00 UTC) on 27 October 2026"><span id="pollsLab">Polls close in</span><b id="pollsClock">—</b></div>
+    <div class="status"><span class="dot" id="dot"></span><span id="stat">Connecting to Polymarket…</span></div>
+    <div class="mstat">Markets <b id="mcount">—</b></div>
+    <div class="mstat">Traded <b id="mvol">—</b></div>
+    <div class="mstat">24h <b id="mvol24">—</b></div>
+  </div>
+</header>
+
+<div class="wrap">
+<main>
+  <div id="errbox" hidden class="err-banner"></div>
+
+  <section class="panel pmhero" id="pmhero">
+    <div class="pm">
+      <figure class="pm-portrait" id="pmPortrait"><img id="pmImg" alt="" referrerpolicy="no-referrer"><figcaption class="pm-cap" id="pmCap"></figcaption></figure>
+      <div class="pm-body">
+        <div class="eyebrow" id="pmEyebrow">Prime Minister after the election</div>
+        <h2 class="pm-name" id="pmName">—</h2>
+        <div class="pm-role" id="pmRole"></div>
+        <div class="pm-odds"><span class="pm-pct num" id="pmPct">—</span><div class="pm-oddsmeta" id="pmOddsMeta"></div></div>
+        <div class="pm-facts" id="pmFacts"></div>
+        <div class="pm-platform"><div class="eyebrow">Platform</div><ul id="pmPlatform"></ul><div class="pm-src" id="pmSrc"></div></div>
+      </div>
+    </div>
+    <div class="pm-rivals" id="pmRivals"></div>
+    <div class="pm-divider"><div class="eyebrow">Headline odds · raw market prices</div></div>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section class="panel hemi-wrap" id="seatmap">
+    <div class="phead" style="margin-bottom:0"><div><div class="eyebrow">Implied 120-seat Knesset</div><h2>Expected seat map</h2>
+      <p>Each party's mean seats from the simulation, rounded to 120. Opposition bloc on the left, Netanyahu bloc on the right, Arab parties and unaligned lists in the middle.</p></div>
+      <div class="mono muted" style="font-size:.78rem">61 seats for a majority</div></div>
+    <svg class="hemi" id="hemi" viewBox="-1.12 -1.38 2.24 1.66" role="img" aria-label="Seat map of 120 seats, split by bloc"></svg>
+    <div class="blocbar" id="blocbar"></div>
+    <div class="bloclegend" id="bloclegend"></div>
+    <div class="partykey" id="partykey"></div>
+  </section>
+
+  <section class="panel" id="coalitions">
+    <div class="phead"><div><div class="eyebrow">Paths to a government</div><h2>Who can reach 61</h2>
+      <p>Each line adds up a group of parties' seats in every simulated Knesset. A majority government needs 61 seats inside the coalition. A minority government governs with fewer and relies on parties that back it from outside without joining. The notes give each party's own stated conditions, which rule some of these out in practice.</p></div></div>
+    <div class="coal-grid">
+      <div><h3 class="coal-h">Majority governments</h3><div class="coal-list" id="coalMaj"></div></div>
+      <div><h3 class="coal-h">Minority governments</h3><div class="coal-list" id="coalMin"></div></div>
+    </div>
+    <div class="pm-src" id="coalSrc"></div>
+  </section>
+
+  <section class="panel" id="ingov">
+    <div class="phead"><div><div class="eyebrow">Cabinet composition · Polymarket</div><h2>Who's in the next government</h2>
+      <p>Each party's price for holding at least one ministry in the first government formed after this election. Parties that only back the government from outside resolve No. The solid bar is the price and the faint band behind it is the bid–ask spread. The vertical line is the price if a government is sworn in by 30 June 2027: the price divided by the chance that happens.</p></div>
+      <a class="mono muted" style="font-size:.78rem" href="https://polymarket.com/event/which-parties-will-be-in-the-next-israeli-government" target="_blank" rel="noopener">polymarket ↗</a></div>
+    <div class="ig-wrap"><div class="ig-groups" id="govParties"></div><div class="ig-stats" id="govStats"></div></div>
+  </section>
+
+  <section class="panel" id="live">
+    <div class="phead">
+      <div><div class="eyebrow">Live price history · Polymarket CLOB</div><h2 id="livetitle">Odds over time</h2><p id="livesub"></p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <label class="velctl"><span>Price</span><select id="priceMode" aria-label="Price measure"></select></label>
+        <div class="seg" id="tickSeg"></div><div class="seg" id="rangeSeg"></div></div>
+    </div>
+    <div class="tabs" id="tabs"></div>
+    <div class="chartbox"><canvas id="liveChart"></canvas><div class="loading" id="liveLoading">Loading history…</div></div>
+    <div class="legend" id="liveLegend"></div>
+    <div class="vel-head">
+      <div><div class="eyebrow">Velocity · derivative of the odds above</div><span class="muted" style="font-size:.82rem">Change in the chosen price over a trailing window, read from the live order-book tape. Units: <b class="mono" id="velUnitLabel"></b></span></div>
+      <div class="velctl">
+        <label for="velN">Window</label>
+        <input id="velN" type="number" min="0" step="any" value="1" inputmode="decimal">
+        <select id="velU" aria-label="Window unit"><option value="1">ms</option><option value="1000">s</option><option value="60000" selected>min</option><option value="3600000">h</option></select>
+        <label for="velPer">Show as</label>
+        <select id="velPer"><option value="0" selected>Change over window</option><option value="1000">Rate per second</option><option value="60000">Rate per minute</option><option value="3600000">Rate per hour</option></select>
+      </div>
+    </div>
+    <div class="chartbox vel"><canvas id="velChart"></canvas></div>
+  </section>
+
+  <section class="panel" id="trend">
+    <div class="phead">
+      <div><div class="eyebrow">Implied seats over time · all seat-bracket markets</div><h2>Implied seats</h2>
+      <p id="trendSub">Expected seats rebuilt from the history of every seat-bracket market, normalised to 120. New points stream from the order book at the tick rate set above.</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><div class="seg" id="trendView"></div><div class="seg" id="trendMode"></div><div class="seg" id="trendRange"></div></div>
+    </div>
+    <div class="chartbox"><canvas id="trendChart"></canvas><canvas id="trendBars" hidden></canvas><div class="loading" id="trendLoading">Fetching 60+ bracket histories…</div></div>
+    <div class="legend" id="trendLegend"></div>
+  </section>
+
+  <section class="panel" id="seats">
+    <div class="phead">
+      <div><div class="eyebrow">Implied seats · 20,000 simulated Knessets</div><h2>Party by party</h2>
+      <p>Each party's seat-bracket market is turned into a probability distribution, sampled, and rescaled so every simulated Knesset has exactly 120 seats. The bar shows the mean and the 10th–90th percentile range. The outlined box is the price error: how far the mean could move if each bracket were priced anywhere a trade of the chosen size would fill, so thin markets get wide boxes. Click a row to chart its brackets.</p></div>
+      <label class="velctl"><span>Price error at</span><select id="errUsd" aria-label="Trade size for price error"><option value="100">$100</option><option value="500" selected>$500</option><option value="2500">$2,500</option><option value="10000">$10,000</option></select></label>
+    </div>
+    <div class="tscroll"><table id="seatTable"></table></div>
+  </section>
+
+  <section class="grid2">
+    <div class="panel">
+      <div class="phead"><div><div class="eyebrow">Bloc arithmetic</div><h2>Path to 61</h2>
+      <p>Simulated seat totals for each bloc as Polymarket defines them. Arab parties and the Reservists count for neither.</p></div></div>
+      <div id="histBibi"></div>
+      <div id="histOpp" style="margin-top:14px"></div>
+      <div class="kv" id="blocKV"></div>
+    </div>
+    <div class="panel">
+      <div class="phead"><div><div class="eyebrow">Bloc seat margin</div><h2>Model vs market</h2>
+      <p>The bloc margin market is thin, so compare it with the margin the party markets imply.</p></div></div>
+      <div class="cmp" id="marginCmp"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="phead"><div><div class="eyebrow">Consistency check</div><h2>Do the markets agree with each other?</h2>
+    <p>Probabilities implied by the party seat markets, set against the price of the market that asks the question directly. A big gap means one of them is mispriced or the brackets miss a correlation.</p></div></div>
+    <div class="cmp" id="checkCmp"></div>
+  </section>
+
+  <section class="panel">
+    <div class="phead"><div><div class="eyebrow">Finishing order</div><h2>1st through 4th place</h2>
+    <p>Model share of simulations where the party finishes in each position, with the direct Polymarket price underneath where a market exists.</p></div></div>
+    <div class="tscroll"><table id="rankTable"></table></div>
+  </section>
+
+  <section class="panel">
+    <div class="phead"><div><div class="eyebrow">After the vote</div><h2>Government formation</h2></div></div>
+    <div class="cards" id="govCards"></div>
+  </section>
+
+  <section class="panel">
+    <div class="phead"><div><div class="eyebrow">Turnout, threshold, vote shares</div><h2>The electorate</h2>
+    <p>Vote-share brackets are separate markets, so their prices do not always sum to 100%. Each card shows the overround.</p></div></div>
+    <div class="cards" id="voteCards"></div>
+  </section>
+
+  <section class="panel">
+    <div class="phead"><div><div class="eyebrow">Raw data</div><h2>Every market</h2></div>
+      <input class="search" id="rawSearch" type="search" placeholder="Filter markets" aria-label="Filter markets"></div>
+    <div id="rawList"></div>
+  </section>
+
+  <section class="panel" id="arb">
+    <div class="phead"><div><div class="eyebrow">Logical mispricings · live order books</div><h2>Arbitrage scanner</h2>
+      <p>Every set of markets whose prices are tied together by logic: brackets that must add to 100%, outcomes that can't both happen, dates that nest inside each other. Sorted by how far the displayed prices break the rule. Cost and return use the real asks you would pay, walked through the order book until the edge runs out.</p></div>
+      <div class="mono muted" id="arbStatus" style="font-size:.78rem">Fetching order books…</div></div>
+    <div class="kv" id="arbSum" style="margin-top:0;margin-bottom:14px"></div>
+    <div class="tscroll"><table id="arbTable"></table></div>
+  </section>
+
+  <section class="panel method">
+    <div class="eyebrow">Method</div>
+    <p><b>Prices</b> are Polymarket's displayed prices (the order-book midpoint, or the last trade when the spread is wide), polled every 15 seconds from the public Gamma API. History comes from the CLOB <span class="mono">prices-history</span> endpoint.</p>
+    <p><b>Seat brackets</b> are separate yes/no markets, so their prices are normalised to sum to 100%. Open-ended brackets get an assumed width: “&lt;20” for Likud is read as 15–19, “35+” as 35–39. A “&lt;4” bracket means missing the 3.25% threshold and winning 0 seats.</p>
+    <p><b>Simulation:</b> each run draws a seat count for every party from its bracket distribution, adds the Reservists–New Economic Party (no seat market) using its “wins a seat” price and its vote-share brackets, then rescales all parties to 120 seats by largest remainder. Draws are independent before rescaling, so the model ignores swings that move several parties together. Treat it as a reading of the markets, not a forecast.</p>
+    <p><b>Vote-share route:</b> expected vote share converted to seats with 120 × share ÷ (100 − expected % of vote below threshold).</p>
+  </section>
+</main>
+</div>
+
+<script>
+"use strict";
+const GAMMA = "https://gamma-api.polymarket.com";
+const CLOB = "https://clob.polymarket.com";
+const POLL_MS = 15000;
+const NSIM = 20000;
+
+const EV = {
+  winner: "israeli-legislative-election-winner",
+  pm: "who-will-be-the-next-prime-minister-of-israel-after-the-next-election",
+  mandate: "who-will-receive-the-first-mandate-to-form-israels-next-government-20261019144924877",
+  bloc: "israel-election-which-bloc-wins-more-seats",
+  majority: "israel-election-any-coalition-wins-a-majority",
+  hung: "israeli-election-results-in-a-hung-parliament",
+  second: "israeli-legislative-election-2nd-place",
+  third: "israeli-legislative-election-3rd-place",
+  fourth: "israeli-legislative-election-4th-place",
+  likudLose: "israel-election-will-likud-lose-seats",
+  margin: "israel-election-bloc-seat-margin-of-victory-20261021154359891",
+  turnout: "israeli-legislative-election-turnout",
+  turnoutDir: "israeli-legislative-election-turnout-directional",
+  below: "israeli-legislative-election-vote-below-threshold-20261019152743816",
+  shareMargin: "israeli-legislative-election-vote-share-margin-of-victory-20261021154359891",
+  pass: "which-parties-will-win-a-seat-in-the-2026-knesset-elections",
+  elections: "how-many-israeli-elections-before-government-formed-20260728195012183",
+  likudYashar: "israel-election-likud-or-yashar-in-government",
+  inGov: "which-parties-will-be-in-the-next-israeli-government",
+  formedBy: "next-israeli-government-formed-by",
+  defense: "next-israeli-minister-of-defense",
+  finance: "next-israeli-minister-of-finance",
+  foreign: "next-israeli-minister-of-foreign-affairs",
+  interior: "next-israeli-minister-of-interior",
+  bibiOut: "netanyahu-out-before-2027",
+  confidence: "vote-of-confidence-in-knesset-by-december-31",
+  confidencePass: "vote-of-confidence-passes-in-knesset-by-december-31",
+  bw: "israel-election-blue-and-white-vote-share",
+  unity: "israel-election-unity-vote-share",
+};
+
+// Seat order below is left-to-right around the hemicycle.
+const PARTIES = [
+  { key:"joint", name:"Joint List", bloc:"arab", color:"#e08a2e", seats:"israel-election-joint-list-of-seats", share:"israel-election-the-joint-list-vote-share", alias:["Joint List","The Joint List"] },
+  { key:"raam", name:"Ra'am", bloc:"arab", color:"#b9652c", seats:"israel-election-raam-of-seats", share:"israel-election-united-arab-list-raam-vote-share", pass:"Ra'am", alias:["Ra'am","United Arab List"] },
+  { key:"dems", name:"The Democrats", bloc:"opp", color:"#8cc152", seats:"israel-election-dems-of-seats", share:"israel-election-the-democrats-vote-share", alias:["The Democrats","Dems","Democrats"] },
+  { key:"yashar", name:"Yashar", bloc:"opp", color:"#0f9d73", seats:"israel-election-yashar-of-seats", share:"israel-election-yashar-vote-share", alias:["Yashar"] },
+  { key:"together", name:"Together", bloc:"opp", color:"#3cc2a6", seats:"israel-election-together-of-seats", share:"israel-election-together-vote-share", alias:["Together"] },
+  { key:"yb", name:"Yisrael Beiteinu", bloc:"opp", color:"#5f8f3c", seats:"israel-election-yisrael-beiteinu-of-seats", share:"israel-election-yisrael-beiteinu-vote-share", alias:["Yisrael Beiteinu"] },
+  { key:"reservists", name:"Reservists–NEP", bloc:"other", color:"#a39b8f", seats:null, share:"israel-election-reservistsnew-economic-party-vote-share", pass:"Reservists and New Economic Party", alias:["Reservists"] },
+  { key:"likud", name:"Likud", bloc:"bibi", color:"#2f5fd0", seats:"israel-election-likud-of-seats", share:null, alias:["Likud"] },
+  { key:"shas", name:"Shas", bloc:"bibi", color:"#2aa0d8", seats:"israel-election-shas-of-seats", share:"israel-election-shas-vote-share", alias:["Shas"] },
+  { key:"utj", name:"UTJ", bloc:"bibi", color:"#6470b8", seats:"israel-election-utj-of-seats", share:"israel-election-united-torah-judaism-vote-share", alias:["UTJ","United Torah Judaism"] },
+  { key:"amcha", name:"Amcha Yisrael", bloc:"bibi", color:"#9db4ee", seats:"israel-election-amcha-yisrael-of-seats", share:"israel-election-amcha-yisrael-vote-share", pass:"Amcha Yisrael", alias:["Amcha Yisrael"] },
+  { key:"rzp", name:"RZP–Zehut", bloc:"bibi", color:"#a985e6", seats:"israel-election-rzp-zehut-of-seats", share:"israel-election-religious-zionist-party-zehut-vote-share", pass:"RZP-Zehut", alias:["RZP-Zehut","RZP–Zehut","Religious Zionist"] },
+  { key:"otzma", name:"Otzma Yehudit", bloc:"bibi", color:"#7c4dcc", seats:"israel-election-otzma-of-seats", share:"israel-election-otzma-yehudit-vote-share", alias:["Otzma Yehudit","Otzma"] },
+];
+const PBYKEY = Object.fromEntries(PARTIES.map(p => [p.key, p]));
+const BLOCS = { opp:{name:"Opposition bloc", short:"Opposition"}, arab:{name:"Arab parties", short:"Arab parties"}, other:{name:"Other", short:"Other"}, bibi:{name:"Netanyahu bloc", short:"Netanyahu bloc"} };
+const LABEL_COLOR = {
+  "Benjamin Netanyahu":"#2f5fd0", "Gadi Eizenkot":"#0f9d73", "Gadi Eisenkot":"#0f9d73", "Naftali Bennett":"#3cc2a6",
+  "Avigdor Lieberman":"#5f8f3c", "Israel Katz":"#7c4dcc", "Amir Ohana":"#a985e6", "Yair Lapid":"#d24a6c",
+  "Bibi":"#2f5fd0", "Opp.":"#0f9d73", "Yes":"#0038b8", "No":"#a39b8f",
+};
+const PALETTE = ["#2f5fd0","#0f9d73","#e08a2e","#7c4dcc","#d24a6c","#2aa0d8","#8cc152","#a39b8f","#b9652c","#5f8f3c"];
+
+const ALL_SLUGS = [...Object.values(EV), ...PARTIES.flatMap(p => [p.seats, p.share]).filter(Boolean)];
+
+const S = { ev:{}, tok:{}, model:null, sim:null, featured:"winner", range:"1h", trendMode:"blocs", trendRange:"1d", trendView:"lines", barsChart:null, barsAt:0, errUsd:500, err:null, tickMs:1000, velW:60000, velPer:0, priceMode:"micro", velChart:null, pmPick:null, pmToken:null, seatTape:[],
+            lastOk:0, nextAt:0, liveChart:null, trendChart:null, liveSeries:[], trend:null, loadSeq:0, trendSeq:0 };
+
+/* ---------- helpers ---------- */
+const $ = (s, el=document) => el.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pct = (p, d) => (p == null || isNaN(p)) ? "—" : (p > 0 && p < 0.005 ? "<1%" : (p > 0.995 && p < 1 ? ">99%" : (p*100).toFixed(d ?? (p < 0.1 && p > 0 ? 1 : 0)) + "%"));
+const usd = v => v >= 1e6 ? "$" + (v/1e6).toFixed(1) + "M" : v >= 1e3 ? "$" + (v/1e3).toFixed(0) + "K" : "$" + Math.round(v);
+const chg = (d, cls=true) => { if (!d || Math.abs(d) < 0.0005) return `<span class="chg muted">±0</span>`; const s = (d > 0 ? "+" : "−") + Math.abs(d*100).toFixed(1); return `<span class="chg ${cls ? (d > 0 ? "up" : "down") : ""}">${s}</span>`; };
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const colorFor = (label, i) => LABEL_COLOR[label] || partyByLabel(label)?.color || PALETTE[i % PALETTE.length];
+function partyByLabel(label){
+  const L = String(label).toLowerCase();
+  return PARTIES.find(p => p.alias.some(a => L === a.toLowerCase() || L.startsWith(a.toLowerCase())));
+}
+
+async function getJSON(url){
+  const r = await fetch(url, { cache:"no-store" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+/* ---------- data ---------- */
+async function fetchEvents(){
+  const chunks = [];
+  for (let i = 0; i < ALL_SLUGS.length; i += 15) chunks.push(ALL_SLUGS.slice(i, i + 15));
+  const res = await Promise.all(chunks.map(c => getJSON(`${GAMMA}/events?limit=50&${c.map(s => "slug=" + encodeURIComponent(s)).join("&")}`)));
+  for (const arr of res) for (const e of arr) S.ev[e.slug] = e;
+  S.tok = {};
+  for (const e of Object.values(S.ev)) for (const m of e.markets || []) {
+    if (!m.outcomePrices || !m.clobTokenIds) continue;
+    const pr = JSON.parse(m.outcomePrices).map(Number), tk = JSON.parse(m.clobTokenIds);
+    tk.forEach((t, i) => S.tok[t] = pr[i]);
+  }
+}
+
+function outs(slug){
+  const e = S.ev[slug]; if (!e) return [];
+  return (e.markets || []).filter(m => !m.closed && m.outcomePrices).map(m => {
+    const prices = JSON.parse(m.outcomePrices).map(Number);
+    return {
+      label: (m.groupItemTitle || m.question || "").trim(), p: prices[0], prices,
+      tokens: JSON.parse(m.clobTokenIds || "[]"), outcomes: JSON.parse(m.outcomes || "[]"),
+      bid: +m.bestBid, ask: +m.bestAsk, last: +m.lastTradePrice,
+      d1: +m.oneDayPriceChange || 0, h1: +m.oneHourPriceChange || 0, w1: +m.oneWeekPriceChange || 0,
+      vol: +m.volume || 0, vol24: +m.volume24hr || 0, liq: +m.liquidity || 0, ord: +m.groupItemThreshold || 0, slug: m.slug, image: m.image || m.icon || "",
+      negRisk: !!m.negRisk, fee: m.feesEnabled && m.feeSchedule ? m.feeSchedule : null, endDate: m.endDate || "",
+    };
+  }).filter(o => !/^(Party|Person) [A-Z0-9]+$/.test(o.label) && !(o.vol === 0 && (o.label === "Other" || o.p === 0.5)))
+    .sort((a, b) => a.ord - b.ord);
+}
+const one = (slug) => outs(slug)[0];
+const find = (slug, label) => { const L = label.toLowerCase(); return outs(slug).find(o => o.label.toLowerCase() === L || partyByLabel(o.label) === partyByLabel(label)); };
+
+/* Parse bracket labels like "<20", "20-24", "35+", "4.5-5.5%", "7.5%+" into numeric ranges. */
+function buckets(list, isShare){
+  const parsed = list.map(o => {
+    const L = o.label.replace(/%/g, "").replace(/seats?/i, "").trim(); let m;
+    if ((m = L.match(/^<\s*([\d.]+)$/))) return { ...o, kind:"lt", a:+m[1] };
+    if ((m = L.match(/^([\d.]+)\s*\+$/))) return { ...o, kind:"ge", a:+m[1] };
+    if ((m = L.match(/^([\d.]+)\s*[-–]\s*([\d.]+)$/))) return { ...o, kind:"rng", a:+m[1], b:+m[2] };
+    if ((m = L.match(/^([\d.]+)$/))) return { ...o, kind:"rng", a:+m[1], b:+m[1] };
+    return null;
+  }).filter(Boolean).sort((x, y) => (x.kind === "lt" ? x.a - 1000 : x.kind === "ge" ? x.a + 1000 : x.a) - (y.kind === "lt" ? y.a - 1000 : y.kind === "ge" ? y.a + 1000 : y.a));
+  if (!parsed.length) return null;
+  const width = x => x && x.kind === "rng" ? (isShare ? x.b - x.a : x.b - x.a + 1) : null;
+  parsed.forEach((x, i) => {
+    if (x.kind === "rng") { x.lo = x.a; x.hi = x.b; }
+    else if (x.kind === "lt") {
+      const w = Math.max(width(parsed[i+1]) ?? (isShare ? 1 : 3), isShare ? 1 : 3);
+      if (!isShare && x.a <= 4) { x.lo = 0; x.hi = 0; }
+      else if (isShare) { x.lo = Math.max(0, x.a - w); x.hi = x.a; }
+      else { x.lo = Math.max(4, x.a - w); x.hi = x.a - 1; }
+    } else {
+      const w = Math.max(width(parsed[i-1]) ?? 2, isShare ? 1 : 2);
+      x.lo = x.a; x.hi = isShare ? x.a + w : x.a + w - 1;
+    }
+    x.mid = (x.lo + x.hi) / 2;
+  });
+  const sum = parsed.reduce((s, x) => s + x.p, 0) || 1;
+  let c = 0;
+  parsed.forEach(x => { x.q = x.p / sum; c += x.q; x.cum = c; });
+  const mean = parsed.reduce((s, x) => s + x.q * x.mid, 0);
+  const d1 = parsed.reduce((s, x) => s + (x.d1 / sum) * x.mid, 0);
+  return { b: parsed, sum, mean, d1 };
+}
+
+function buildModel(){
+  const bt = buckets(outs(EV.below), true);
+  const below = bt ? bt.mean : 5;
+  const passList = outs(EV.pass);
+  const M = { below };
+  for (const p of PARTIES) {
+    const sb = p.seats ? buckets(outs(p.seats), false) : null;
+    const vb = p.share ? buckets(outs(p.share), true) : null;
+    const passMkt = p.pass ? passList.find(o => o.label === p.pass) : null;
+    let passSeat = null;
+    if (sb) { const zero = sb.b.find(x => x.hi === 0); passSeat = 1 - (zero ? zero.q : 0); }
+    const shareSeats = vb ? vb.b.reduce((s, x) => s + x.q * (x.mid >= 3.25 ? x.mid / (100 - below) * 120 : 0), 0) : null;
+    M[p.key] = { sb, vb, passMkt, passSeat, shareMean: vb?.mean ?? null, shareSeats };
+  }
+  return M;
+}
+
+function mulberry32(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+function simulate(M){
+  const rnd = mulberry32(20261027);
+  const K = PARTIES.length;
+  const seats = PARTIES.map(() => new Uint8Array(NSIM));
+  const rawSum = new Float64Array(NSIM);
+  const samplers = PARTIES.map(p => {
+    const m = M[p.key];
+    if (m.sb) return () => { const u = rnd(); const x = m.sb.b.find(x => u <= x.cum) || m.sb.b[m.sb.b.length - 1]; return x.lo + Math.floor(rnd() * (x.hi - x.lo + 1)); };
+    // Reservists: no seat market. P(seat) from the "wins a seat" market, size from vote-share brackets above 3.25%.
+    const pass = m.passMkt ? m.passMkt.p : 0;
+    const cond = m.vb ? m.vb.b.filter(x => x.lo >= 3.25) : [];
+    const cs = cond.reduce((s, x) => s + x.q, 0);
+    return () => {
+      if (rnd() >= pass) return 0;
+      if (!cs) return 4 + Math.floor(rnd() * 2);
+      let u = rnd() * cs, x = cond[cond.length - 1];
+      for (const c of cond) { if (u <= c.q) { x = c; break; } u -= c.q; }
+      const share = x.lo + rnd() * (x.hi - x.lo);
+      return Math.max(4, Math.round(share / (100 - M.below) * 120));
+    };
+  });
+  const raw = new Float64Array(K), rem = new Array(K);
+  const rankCount = PARTIES.map(() => [0, 0, 0, 0]);
+  const idx = PARTIES.map((_, i) => i), jit = new Float64Array(K);
+  for (let s = 0; s < NSIM; s++) {
+    let tot = 0;
+    for (let k = 0; k < K; k++) { raw[k] = samplers[k](); tot += raw[k]; }
+    rawSum[s] = tot;
+    const f = 120 / tot; let alloc = 0;
+    for (let k = 0; k < K; k++) { const x = raw[k] * f, fl = Math.floor(x); seats[k][s] = fl; alloc += fl; rem[k] = [x - fl, k]; }
+    rem.sort((a, b) => b[0] - a[0]);
+    for (let i = 0; i < 120 - alloc; i++) seats[rem[i][1]][s]++;
+    for (let k = 0; k < K; k++) jit[k] = seats[k][s] + rnd() * 0.5;
+    idx.sort((a, b) => jit[b] - jit[a]);
+    for (let r = 0; r < 4; r++) rankCount[idx[r]][r]++;
+  }
+  const out = { parties:{}, blocs:{}, rawSum };
+  const q = (arr, p) => arr[Math.min(arr.length - 1, Math.floor(p * arr.length))];
+  PARTIES.forEach((p, k) => {
+    const a = seats[k]; let sum = 0, inK = 0;
+    for (let s = 0; s < NSIM; s++) { sum += a[s]; if (a[s] > 0) inK++; }
+    const sorted = Array.from(a).sort((x, y) => x - y);
+    out.parties[p.key] = { mean: sum / NSIM, p10: q(sorted, .1), p50: q(sorted, .5), p90: q(sorted, .9), pIn: inK / NSIM, rank: rankCount[k].map(c => c / NSIM), arr: a };
+  });
+  for (const b of Object.keys(BLOCS)) {
+    const arr = new Uint8Array(NSIM);
+    PARTIES.forEach((p, k) => { if (p.bloc === b) for (let s = 0; s < NSIM; s++) arr[s] += seats[k][s]; });
+    out.blocs[b] = arr;
+  }
+  let b61 = 0, o61 = 0, bMore = 0, tie = 0;
+  const marg = {};
+  for (let s = 0; s < NSIM; s++) {
+    const bb = out.blocs.bibi[s], oo = out.blocs.opp[s];
+    if (bb >= 61) b61++; if (oo >= 61) o61++;
+    if (bb > oo) bMore++; else if (bb === oo) tie++;
+    const d = bb - oo, a = Math.abs(d);
+    const key = d === 0 ? "Tie" : `${d > 0 ? "Bibi" : "Opposition"} ${a >= 7 ? "7+" : a >= 5 ? "5-6" : a >= 3 ? "3-4" : "1-2"} seats`;
+    marg[key] = (marg[key] || 0) + 1;
+  }
+  Object.keys(marg).forEach(k => marg[k] /= NSIM);
+  Object.assign(out, { pBibi61: b61 / NSIM, pOpp61: o61 / NSIM, pAny61: (b61 + o61) / NSIM, pBibiMore: bMore / NSIM, pTie: tie / NSIM, pOppMore: 1 - (bMore + tie) / NSIM, marg });
+  out.rawMean = rawSum.reduce((s, x) => s + x, 0) / NSIM;
+  return out;
+}
+
+/* Largest-remainder allocation of expected seats to whole seats summing to 120. */
+function allocate(means){
+  const tot = means.reduce((s, x) => s + x, 0) || 1;
+  const xs = means.map(m => m * 120 / tot), fl = xs.map(Math.floor);
+  let left = 120 - fl.reduce((s, x) => s + x, 0);
+  xs.map((x, i) => [x - fl[i], i]).sort((a, b) => b[0] - a[0]).slice(0, left).forEach(([, i]) => fl[i]++);
+  return fl;
+}
+
+/* ---------- rendering ---------- */
+function tile(eyebrow, list, sub){
+  if (!list.length) return "";
+  const [a, b] = list;
+  return `<div class="tile"><div class="eyebrow">${esc(eyebrow)}</div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px"><div class="big" style="color:${colorFor(a.label, 0)}">${pct(a.p)}</div>${chg(a.d1)}</div>
+    <div class="who">${esc(a.label)}</div>
+    ${b ? `<div class="runner"><span>${esc(b.label)}</span><span class="num">${pct(b.p)} ${chg(b.d1)}</span></div>` : ""}
+    ${sub ? `<div class="sub">${sub}</div>` : ""}</div>`;
+}
+function renderTiles(){
+  const top = slug => outs(slug).slice().sort((a, b) => b.p - a.p);
+  const bloc = one(EV.bloc);
+  const blocList = bloc ? bloc.outcomes.map((lab, i) => ({ label: lab === "Opp." ? "Opposition bloc" : "Netanyahu bloc", p: bloc.prices[i], d1: i === 0 ? bloc.d1 : -bloc.d1 })).sort((a, b) => b.p - a.p) : [];
+  blocList.forEach(x => LABEL_COLOR[x.label] = x.label.startsWith("Opp") ? css("--opp") : css("--bibi"));
+  const maj = one(EV.majority), hung = one(EV.hung);
+  const majList = maj ? [{ label:"A bloc reaches 61 seats", p: maj.p, d1: maj.d1 }] : [];
+  $("#tiles").innerHTML =
+    tile("Most seats", top(EV.winner), `Vol ${usd(S.ev[EV.winner]?.volume || 0)}`) +
+    tile("Bigger bloc", blocList, `Model ${pct(S.sim.pOppMore + S.sim.pTie / 2)} opposition`) +
+    tile("Outright majority", majList, `Hung parliament: ${pct(hung?.p)} · model ${pct(S.sim.pAny61)}`) +
+    tile("First mandate from the President", top(EV.mandate), "") +
+    tile("Likud under 32 seats", one(EV.likudLose) ? [{ label: "Likud loses seats", p: one(EV.likudLose).p, d1: one(EV.likudLose).d1 }] : [], `Model ${pct(sumWhere("likud", v => v < 32))}`) +
+    tile("Turnout", top(EV.turnout).map(o => ({ ...o, label: `${o.label} turnout` })), `Vol ${usd(S.ev[EV.turnout]?.volume || 0)}`);
+}
+function sumWhere(key, fn){ const a = S.sim.parties[key].arr; let c = 0; for (let i = 0; i < a.length; i++) if (fn(a[i])) c++; return c / a.length; }
+
+/* ---------- PM hero ---------- */
+const SRC = {
+  wiki: ["Wikipedia: 2026 election campaign", "https://en.wikipedia.org/wiki/2026_Israeli_legislative_election_campaign"],
+  guide: ["Jerusalem Post party guide", "https://www.jpost.com/israel-election-2026/article-912590"],
+  yashar: ["Jerusalem Post on Yashar", "https://www.jpost.com/israel-election-2026/article-911464"],
+  likud: ["Jerusalem Post on Likud", "https://www.jpost.com/israel-election-2026/article-911432"],
+  together: ["Wikipedia: Together (Israel)", "https://en.wikipedia.org/wiki/Together_(Israel)"],
+};
+const LIKUD_PLATFORM = [
+  "“Security without compromise”: further withdrawal from Gaza only once Hamas disarms",
+  "Opposes a Palestinian state and a Palestinian Authority role in postwar Gaza; keeps security control in the West Bank",
+  "A government-appointed commission on 7 October rather than a state commission of inquiry",
+  "Continue judicial and media reform; a free-market economy; Likud keeps the Defense and National Security ministries",
+];
+const TOGETHER_PLATFORM = [
+  "Merger of Bennett 2026 and Lapid's Yesh Atid, formed in April 2026 under Bennett's leadership",
+  "A constitution and term limits for the prime minister",
+  "A state commission of inquiry into 7 October; enlistment of Haredi men into the IDF",
+  "Cost of living: an “all-out war on monopolies”; Lapid pledges civil marriage and LGBT rights",
+];
+const CANDIDATES = {
+  "Gadi Eizenkot": { party:"yashar", role:"Former IDF chief of staff · leads Yashar", src:["yashar", "wiki"], platform:[
+    "A new national-security doctrine: confront Iran, end Hamas rule in Gaza, contain Hezbollah",
+    "A state commission of inquiry into 7 October, government reform and a written constitution",
+    "Haredi conscription a top priority, with exemptions capped at about 3% of yeshiva students",
+    "Cost of living: a “war on monopolies” and food prices brought toward the OECD average",
+    "Coalition: open to Likud or Religious Zionism as partners only if Netanyahu is not prime minister",
+  ] },
+  "Benjamin Netanyahu": { party:"likud", role:"Prime Minister · leads Likud", src:["likud", "wiki"], platform: LIKUD_PLATFORM },
+  "Naftali Bennett": { party:"together", role:"Former Prime Minister · leads Together", src:["together", "wiki"], platform: TOGETHER_PLATFORM },
+  "Yair Lapid": { party:"together", role:"Former Prime Minister · co-founded Together with Bennett", src:["together", "wiki"], platform: TOGETHER_PLATFORM },
+  "Avigdor Lieberman": { party:"yb", role:"Leads Yisrael Beiteinu", src:["guide", "wiki"], platform:[
+    "Secular right-wing nationalist; a tougher line against Hamas",
+    "A state commission of inquiry into 7 October and a written constitution",
+    "Cut superfluous ministries and coalition funding allocations",
+    "Coalition: rules out Arab or Haredi parties and a unity government with Likud",
+  ] },
+  "Yair Golan": { party:"dems", role:"Leads The Democrats", src:["guide", "wiki"], platform:[
+    "Socioeconomic equality, with more funding for welfare, health and education",
+    "A state commission of inquiry into 7 October; democracy, the rule of law and the judiciary",
+    "State benefits tied to military or civic service; cut funding to illegal outposts",
+    "Coalition: wants the Zionist opposition to partner with Ra'am",
+  ] },
+  "Israel Katz": { party:"likud", role:"Likud", src:["likud"], platform: LIKUD_PLATFORM },
+  "Amir Ohana": { party:"likud", role:"Likud", src:["likud"], platform: LIKUD_PLATFORM },
+  "Itamar Ben Gvir": { party:"otzma", role:"Leads Otzma Yehudit", src:["guide"], platform:[
+    "Far-right nationalist with a hardline security approach",
+    "Expanded Jewish settlement and tougher law enforcement",
+  ] },
+};
+function renderPM(){
+  const list = outs(EV.pm).slice().sort((a, b) => b.p - a.p);
+  if (!list.length || !S.sim) return;
+  const lead = list[0];
+  const cur = (S.pmPick && list.find(o => o.label === S.pmPick)) || lead;
+  const c = CANDIDATES[cur.label] || {};
+  const party = c.party ? PBYKEY[c.party] : null;
+  const rank = list.indexOf(cur) + 1;
+  S.pmToken = cur.tokens[0];
+  $("#pmEyebrow").textContent = rank === 1 ? "Favourite to be Prime Minister after the election" : `No. ${rank} in the Prime Minister market`;
+  $("#pmName").textContent = cur.label;
+  $("#pmRole").textContent = c.role || "";
+  const img = $("#pmImg");
+  if (cur.image && img.getAttribute("src") !== cur.image) img.src = cur.image;
+  img.alt = `Portrait of ${cur.label}`;
+  $("#pmPortrait").style.setProperty("--pmc", party ? party.color : "#333");
+  $("#pmCap").textContent = party ? `${party.name} · ${party.bloc === "bibi" ? "Netanyahu bloc" : party.bloc === "opp" ? "Opposition bloc" : ""}` : "";
+  $("#pmPct").style.color = party ? party.color : "var(--ink)";
+  const mandate = outs(EV.mandate).find(o => o.label === cur.label || (o.label.split(" ").pop() === cur.label.split(" ").pop()));
+  const facts = [];
+  if (party) {
+    const r = S.sim.parties[party.key];
+    facts.push(`<div><b>${r.mean.toFixed(1)}</b><span>${esc(party.name)} implied seats (80%: ${r.p10}–${r.p90})</span></div>`);
+    facts.push(`<div><b>${pct(r.rank[0])}</b><span>${esc(party.name)} wins most seats (model)</span></div>`);
+    if (party.bloc === "bibi" || party.bloc === "opp") {
+      const arr = S.sim.blocs[party.bloc], m = arr.reduce((s, x) => s + x, 0) / NSIM;
+      facts.push(`<div><b>${m.toFixed(1)}</b><span>${party.bloc === "bibi" ? "Netanyahu" : "Opposition"} bloc seats · ${pct(party.bloc === "bibi" ? S.sim.pBibi61 : S.sim.pOpp61)} reach 61</span></div>`);
+    }
+  }
+  if (mandate) facts.push(`<div><b>${pct(mandate.p)}</b><span>Gets the first mandate from the President</span></div>`);
+  $("#pmFacts").innerHTML = facts.join("");
+  $("#pmPlatform").innerHTML = (c.platform || ["No platform summary in this tracker for this candidate."]).map(x => `<li>${esc(x)}</li>`).join("");
+  $("#pmSrc").innerHTML = c.src ? "Sources: " + c.src.map(k => `<a href="${SRC[k][1]}" target="_blank" rel="noopener">${esc(SRC[k][0])}</a>`).join(" · ") : "";
+  $("#pmRivals").innerHTML = list.filter(o => o.p >= 0.005).slice(0, 6).map(o => {
+    const pp = CANDIDATES[o.label]?.party ? PBYKEY[CANDIDATES[o.label].party] : null;
+    return `<button type="button" class="rival" data-pm="${o === lead ? "" : esc(o.label)}" aria-pressed="${o === cur}">
+      <img src="${esc(o.image)}" alt="" referrerpolicy="no-referrer" loading="lazy" style="box-shadow:0 0 0 2px ${pp ? pp.color : "var(--line)"}">
+      <span class="rtxt"><span class="rn">${esc(o.label)}</span><span class="rp">${pct(o.p)} ${chg(o.d1)}</span></span></button>`;
+  }).join("");
+  updatePmLive();
+}
+function updatePmLive(){
+  if (!S.pmToken) return;
+  const o = outs(EV.pm).find(x => x.tokens[0] === S.pmToken); if (!o) return;
+  const p = livePrice(S.pmToken) ?? o.p, now = Date.now();
+  $("#pmPct").textContent = pct(p, 2);
+  $("#pmOddsMeta").innerHTML = `<span>to be Prime Minister · Polymarket</span>
+    <span>24h ${chg(o.d1)} · 1w ${chg(o.w1)}</span>
+    <span>Velocity ${velTag(velocity(S.pmToken, 1000, now), "1s")} ${velTag(velocity(S.pmToken, 60000, now), "1m")}</span>
+    <span>Vol ${usd(o.vol)} · liquidity ${usd(o.liq)}</span>`;
+}
+
+/* ---------- seat map: three sectors with a gap between blocs ---------- */
+const SEAT_GROUPS = [
+  { id:"opp", label:"Opposition bloc", color:"--opp", keys:["dems", "yashar", "together", "yb"] },
+  { id:"mid", label:"Arab & unaligned", color:"--arab", keys:["joint", "raam", "reservists"] },
+  { id:"bibi", label:"Netanyahu bloc", color:"--bibi", keys:["amcha", "likud", "shas", "utj", "rzp", "otzma"] },
+];
+function renderHemicycle(){
+  const means = PARTIES.map(p => S.sim.parties[p.key].mean);
+  const seats = allocate(means);
+  const by = Object.fromEntries(PARTIES.map((p, k) => [p.key, seats[k]]));
+  const rows = 7, r0 = 0.44, r1 = 1, gapA = 0.075, dot = 0.036;
+  const radii = Array.from({ length: rows }, (_, i) => r0 + (r1 - r0) * i / (rows - 1));
+  const rt = radii.reduce((s, r) => s + r, 0);
+  const groups = SEAT_GROUPS.map(g => ({ ...g, n: g.keys.reduce((s, k) => s + by[k], 0) })).filter(g => g.n > 0);
+  const usable = Math.PI - gapA * (groups.length - 1);
+  let a = Math.PI, svg = "";
+  for (const g of groups) {
+    const span = usable * g.n / 120, a0 = a;
+    // Seats per row in proportion to the row's arc length, so spacing stays even.
+    const raw = radii.map(r => g.n * r / rt), cnt = raw.map(Math.floor);
+    raw.map((x, i) => [x - cnt[i], i]).sort((x, y) => y[0] - x[0]).slice(0, g.n - cnt.reduce((s, x) => s + x, 0)).forEach(([, i]) => cnt[i]++);
+    const pos = [];
+    radii.forEach((r, i) => { for (let j = 0; j < cnt[i]; j++) pos.push({ a: a0 - span * (j + 0.5) / cnt[i], r }); });
+    pos.sort((x, y) => y.a - x.a || x.r - y.r);
+    const col = []; g.keys.forEach(k => { for (let i = 0; i < by[k]; i++) col.push(PBYKEY[k]); });
+    pos.forEach((s, i) => { const p = col[i]; svg += `<circle cx="${(s.r * Math.cos(s.a)).toFixed(4)}" cy="${(-s.r * Math.sin(s.a)).toFixed(4)}" r="${dot}" fill="${p.color}"><title>${esc(p.name)}: ${by[p.key]} seats</title></circle>`; });
+    // Sector label outside the arc.
+    // Middle sector labelled above the arc; the two blocs under their own ends of the arc.
+    const am = a0 - span / 2;
+    const side = g.id === "mid" ? 0 : Math.sign(Math.cos(am));
+    const lx = side ? side * (r0 + r1) / 2 : 1.17 * Math.cos(am), ly = side ? 0.15 : -1.17 * Math.sin(am) - 0.02;
+    svg += `<text x="${lx.toFixed(3)}" y="${ly.toFixed(3)}" text-anchor="middle" font-family="Frank Ruhl Libre, Georgia, serif" font-weight="900" font-size="0.15" fill="var(${g.color})">${g.n}</text>`;
+    svg += `<text x="${lx.toFixed(3)}" y="${(ly + 0.075).toFixed(3)}" text-anchor="middle" font-family="Rubik, sans-serif" font-size="0.052" fill="var(--muted)" letter-spacing="0.004">${esc(g.label.toUpperCase())}</text>`;
+    a = a0 - span - gapA;
+  }
+  const bt = {}; PARTIES.forEach((p, k) => bt[p.bloc] = (bt[p.bloc] || 0) + seats[k]);
+  const bm = {}; for (const b of Object.keys(BLOCS)) bm[b] = S.sim.blocs[b].reduce((s, x) => s + x, 0) / NSIM;
+  const lead = bt.opp >= bt.bibi ? "opp" : "bibi", need = Math.max(0, 61 - bt[lead]);
+  svg += `<text x="0" y="-0.13" text-anchor="middle" font-family="Frank Ruhl Libre, Georgia, serif" font-weight="900" font-size="0.15"><tspan fill="var(--opp)">${bt.opp}</tspan><tspan fill="var(--muted)" font-size="0.1"> vs </tspan><tspan fill="var(--bibi)">${bt.bibi}</tspan></text>`;
+  svg += `<text x="0" y="-0.04" text-anchor="middle" font-family="Rubik, sans-serif" font-size="0.048" fill="var(--muted)">${need ? `${BLOCS[lead].short} ${need} short of 61` : `${BLOCS[lead].short} has a majority`}</text>`;
+  $("#hemi").innerHTML = svg;
+  $("#blocbar").innerHTML = ["opp", "arab", "other", "bibi"].map(b => `<span style="width:${bt[b] / 1.2}%;background:var(--${b})" title="${BLOCS[b].name}: ${bt[b]}"></span>`).join("") + `<i class="mid" title="60 seats"></i>`;
+  $("#bloclegend").innerHTML = ["opp", "arab", "other", "bibi"].map(b => `<span><i class="sw" style="background:var(--${b})"></i>${BLOCS[b].short} <b>${bt[b]}</b> <span class="muted num">(${bm[b].toFixed(1)}${S.err ? ` <span title="Price error at $${S.err.usd.toLocaleString()} trades, 80% range">${errTxt(S.err.blocs[b])}</span>` : ""})</span></span>`).join("");
+  $("#partykey").innerHTML = PARTIES.map((p, k) => seats[k] ? `<span><i class="sw" style="background:${p.color}"></i>${esc(p.name)} ${seats[k]}</span>` : "").join("");
+}
+
+/* ---------- coalition combinations ---------- */
+const OPP4 = ["yashar", "together", "dems", "yb"], BIBI6 = ["likud", "shas", "utj", "rzp", "otzma", "amcha"];
+const MAJORITY = [
+  { name:"Netanyahu bloc", core: BIBI6, note:"The sitting coalition's parties plus Amcha Yisrael. Shas and UTJ won't join without a draft-exemption law, while Amcha Yisrael wants more Haredi enlistment." },
+  { name:"Netanyahu bloc + Reservists", core: [...BIBI6, "reservists"], note:"The Reservists make a universal draft law a condition for joining any government." },
+  { name:"Zionist opposition", core: OPP4, note:"All four back a state commission of inquiry into 7 October." },
+  { name:"Zionist opposition + Reservists", core: [...OPP4, "reservists"], note:"Hendel's list says it will only join a Zionist government." },
+  { name:"Opposition + Ra'am", core: [...OPP4, "raam"], note:"The 2021 Bennett–Lapid model. Golan backs partnering with Ra'am; Lieberman rules out Arab parties in government." },
+  { name:"Every anti-Netanyahu list", core: [...OPP4, "raam", "joint", "reservists"], note:"Includes the Joint List, which has offered only conditional support, and Lieberman rules out Arab parties." },
+  { name:"Unity: Yashar + Together + Likud", core: ["yashar", "together", "likud"], note:"Eisenkot has said he would sit with Likud only if Netanyahu is not prime minister." },
+  { name:"Centre + Haredi parties", core: ["yashar", "together", "dems", "shas", "utj"], note:"Clashes with Yashar's and Together's push for Haredi conscription; Shas and UTJ demand an exemption law." },
+  { name:"Right without the Haredim", core: ["likud", "rzp", "otzma", "amcha", "yb", "reservists"], note:"Lieberman has ruled out a unity government with Likud." },
+];
+const MINORITY = [
+  { name:"Zionist opposition, backed by Ra'am and the Joint List", core: OPP4, ext: ["raam", "joint"], note:"The Joint List says it could back an anti-Netanyahu government in return for action on crime, home demolitions and recognition of Bedouin villages." },
+  { name:"Opposition + Ra'am, backed by the Joint List", core: [...OPP4, "raam"], ext: ["joint"], note:"Ra'am joins the government; the Joint List supports it from outside." },
+  { name:"Opposition + Reservists, backed by Ra'am", core: [...OPP4, "reservists"], ext: ["raam"], note:"Ra'am presents itself as a pragmatic partner for replacing the government." },
+  { name:"Opposition + Reservists, backed by both Arab parties", core: [...OPP4, "reservists"], ext: ["raam", "joint"], note:"The widest outside-support arrangement on the anti-Netanyahu side." },
+];
+function coalStats(keys){
+  const arr = new Uint8Array(NSIM);
+  for (const k of keys) { const a = S.sim.parties[k].arr; for (let s = 0; s < NSIM; s++) arr[s] += a[s]; }
+  return arr;
+}
+function coalBar(core, ext){
+  const seg = (k, cls) => { const m = S.sim.parties[k].mean; return `<span class="${cls}" style="width:${(m / 1.2).toFixed(2)}%;background:${PBYKEY[k].color}" title="${esc(PBYKEY[k].name)} ${m.toFixed(1)}"></span>`; };
+  return `<div class="coal-bar">${core.map(k => seg(k, "")).join("")}${(ext || []).map(k => seg(k, "ext")).join("")}<i class="m61" title="61 seats"></i></div>`;
+}
+const chip = (k, ext) => `<span class="chip${ext ? " ext" : ""}"><i class="sw" style="background:${PBYKEY[k].color};margin:0"></i>${esc(PBYKEY[k].name)} ${S.sim.parties[k].mean.toFixed(1)}${ext ? " · outside" : ""}</span>`;
+/* "Which parties will be in the next government": one market per party. */
+const govParty = label => /reservist|new economic/i.test(label) ? PBYKEY.reservists : partyByLabel(label);
+function govOdds(){
+  const out = {};
+  for (const o of outs(EV.inGov)) { const p = govParty(o.label); out[p ? p.key : o.label] = o; }
+  return out;
+}
+function formedBy(){ return outs(EV.formedBy).slice().sort((a, b) => Date.parse(a.label) - Date.parse(b.label)); }
+// All of a coalition's parties holding ministries can't be likelier than the least likely one of them.
+function ceilTag(keys){
+  const G = govOdds(), ps = keys.map(k => G[k]).filter(Boolean);
+  if (ps.length < keys.length) return "";
+  const lo = ps.reduce((a, b) => b.p < a.p ? b : a);
+  return `<span title="Polymarket's in-government markets: every party here holding a ministry can't be likelier than ${esc(PBYKEY[govParty(lo.label).key].name)} alone">Market ceiling <b>≤ ${pct(lo.p)}</b></span>`;
+}
+function renderInGov(){
+  const G = govOdds(), fb = formedBy(), pF = fb.length ? fb[fb.length - 1].p : null, R = S.sim.parties;
+  const cond = p => pF ? Math.min(1, p / pF) : null;
+  const row = (name, color, o, seats) => {
+    const lo = isFinite(o.bid) ? o.bid : o.p, hi = isFinite(o.ask) ? o.ask : o.p, c = cond(o.p);
+    return `<div class="ig-row" title="${esc(name)}: ${pct(o.p, 1)} (bid ${(lo * 100).toFixed(1)} / ask ${(hi * 100).toFixed(1)}) · ${usd(o.vol)} traded · ${usd(o.liq)} liquidity">
+      <span class="ig-name"><i class="sw" style="background:${color}"></i>${esc(name)}</span>
+      <div class="ig-track"><i class="ig-band" style="left:${(lo * 100).toFixed(1)}%;width:${Math.max(0.6, (hi - lo) * 100).toFixed(1)}%;background:${color}"></i><i class="ig-fill" style="width:${(o.p * 100).toFixed(1)}%;background:${color}"></i>${c != null ? `<i class="ig-cond" style="left:${(c * 100).toFixed(1)}%"></i>` : ""}</div>
+      <span class="r num">${pct(o.p)}</span><span class="r num muted">${c != null ? pct(c) : "—"}</span><span class="r num muted">${seats != null ? seats.toFixed(1) : "—"}</span></div>`;
+  };
+  const head = `<div class="ig-colh"><span>Party</span><span>Price · spread band · if a government forms</span><span class="r">Price</span><span class="r">If forms</span><span class="r">Seats</span></div>`;
+  let h = head;
+  for (const b of ["opp", "arab", "other", "bibi"]) {
+    const ps = PARTIES.filter(p => p.bloc === b && G[p.key]).sort((x, y) => G[y.key].p - G[x.key].p);
+    if (!ps.length) continue;
+    h += `<div style="--bc:var(--${b})"><div class="ig-gh"><span class="eyebrow">${esc(BLOCS[b].name)}</span></div>${ps.map(p => row(p.name, p.color, G[p.key], R[p.key].mean)).join("")}</div>`;
+  }
+  const extra = Object.keys(G).filter(k => !PBYKEY[k]).map(k => G[k]).sort((a, b) => b.p - a.p);
+  if (extra.length) h += `<div style="--bc:var(--muted)"><div class="ig-gh"><span class="eyebrow">Not in the seat markets</span></div>${extra.map(o => row(o.label, css("--other"), o, null)).join("")}</div>`;
+  $("#govParties").innerHTML = h;
+
+  const g = k => G[k]?.p ?? null, pm = l => outs(EV.pm).find(o => o.label === l)?.p ?? null;
+  const ra = g("raam"), jl = g("joint"), eiz = pm("Gadi Eizenkot") ?? pm("Gadi Eisenkot"), bibi = pm("Benjamin Netanyahu");
+  let expSeats = 0, expOk = !!pF;
+  for (const p of PARTIES) if (G[p.key]) expSeats += (cond(G[p.key].p) ?? 0) * R[p.key].mean;
+  const stats = [];
+  if (fb.length) stats.push(`<div class="ig-stat"><span class="lab">New government sworn in by 30 June 2027</span><b>${pct(pF)}</b><span class="sub">${fb.slice(0, -1).map(o => `by ${esc(o.label.replace(/, \d{4}$/, ""))} ${pct(o.p)}`).join(" · ")}</span></div>`);
+  if (ra != null && jl != null) stats.push(`<div class="ig-stat"><span class="lab">An Arab party holds a ministry</span><b>${pct(Math.max(ra, jl))}–${pct(Math.min(1, ra + jl))}</b><span class="sub">Ra'am ${pct(ra, 1)} · Joint List ${pct(jl, 1)}. The range runs from both always together to never together.</span></div>`);
+  if (ra != null && eiz != null) stats.push(`<div class="ig-stat"><span class="lab">Ra'am in an Eizenkot-led government</span><b>≤ ${pct(Math.min(ra, eiz))}</b><span class="sub">Ra'am won't sit with Otzma or RZP, so nearly all of its ${pct(ra)} is an anti-Netanyahu government, about ${pct(Math.min(1, ra / eiz))} of Eizenkot's ${pct(eiz)} PM odds. Outside support isn't priced anywhere.</span></div>`);
+  if (expOk) stats.push(`<div class="ig-stat"><span class="lab">Expected seats inside the government, if one forms</span><b>${expSeats.toFixed(1)}</b><span class="sub">Each party's in-government odds once a government forms, times its implied seats. ${expSeats < 61 ? "Below 61 means the market expects outside support, or is pricing too little in total." : "61 is a majority."}</span></div>`);
+  if (g("likud") != null && bibi != null) stats.push(`<div class="ig-stat"><span class="lab">Netanyahu-led government</span><b>${pct(g("likud"))}</b><span class="sub">Likud in government. Netanyahu for PM ${pct(bibi)} · Shas ${pct(g("shas"))} · UTJ ${pct(g("utj"))}. The Haredi parties track Netanyahu, so the market doesn't expect them to switch sides.</span></div>`);
+  $("#govStats").innerHTML = stats.join("");
+}
+function renderCoalitions(){
+  const q = (arr, p) => { const s = Array.from(arr).sort((a, b) => a - b); return s[Math.floor(p * (s.length - 1))]; };
+  const maj = MAJORITY.map(c => { const a = coalStats(c.core); let n = 0; for (const v of a) if (v >= 61) n++; return { ...c, p: n / NSIM, mean: a.reduce((s, x) => s + x, 0) / NSIM, lo: q(a, .1), hi: q(a, .9) }; }).sort((x, y) => y.p - x.p || y.mean - x.mean);
+  $("#coalMaj").innerHTML = maj.map(c => `<div class="coal">
+    <div class="coal-top"><span class="coal-name">${esc(c.name)}</span><span class="coal-p">${pct(c.p)}<small>reach 61</small></span></div>
+    <div class="chips">${c.core.map(k => chip(k)).join("")}</div>
+    ${coalBar(c.core)}
+    <div class="coal-meta"><span>Mean <b>${c.mean.toFixed(1)}</b> seats</span><span>80% range <b>${c.lo}–${c.hi}</b></span><span>${c.mean >= 61 ? "Above" : "Short of"} 61 by <b>${Math.abs(c.mean - 61).toFixed(1)}</b></span>${ceilTag(c.core)}</div>
+    <div class="coal-note">${esc(c.note)}</div></div>`).join("");
+  const min = MINORITY.map(c => {
+    const a = coalStats(c.core), b = coalStats(c.ext); let need = 0, ok = 0;
+    for (let s = 0; s < NSIM; s++) { const t = a[s] + b[s]; if (t >= 61) ok++; if (a[s] < 61 && t >= 61) need++; }
+    return { ...c, pOk: ok / NSIM, pNeed: need / NSIM, mean: a.reduce((s, x) => s + x, 0) / NSIM, ext: c.ext, extMean: b.reduce((s, x) => s + x, 0) / NSIM };
+  }).sort((x, y) => y.pOk - x.pOk);
+  $("#coalMin").innerHTML = min.map(c => `<div class="coal">
+    <div class="coal-top"><span class="coal-name">${esc(c.name)}</span><span class="coal-p">${pct(c.pOk)}<small>reach 61 with support</small></span></div>
+    <div class="chips">${c.core.map(k => chip(k)).join("")}${c.ext.map(k => chip(k, true)).join("")}</div>
+    ${coalBar(c.core, c.ext)}
+    <div class="coal-meta"><span>Government <b>${c.mean.toFixed(1)}</b> + outside <b>${c.extMean.toFixed(1)}</b></span><span>Needs the outside support in <b>${pct(c.pNeed)}</b> of runs</span>${ceilTag(c.core)}</div>
+    <div class="coal-note">${esc(c.note)}</div></div>`).join("");
+  $("#coalSrc").innerHTML = `Party conditions from <a href="${SRC.wiki[1]}" target="_blank" rel="noopener">${SRC.wiki[0]}</a> and the <a href="${SRC.guide[1]}" target="_blank" rel="noopener">${SRC.guide[0]}</a>. Faded bar segments are outside supporters; the black line marks 61.`;
+}
+
+function spark(sb, color){
+  if (!sb) return "";
+  const w = 96, h = 26, n = sb.b.length, bw = w / n, mx = Math.max(...sb.b.map(x => x.q)) || 1;
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">${sb.b.map((x, i) => {
+    const bh = Math.max(1, (x.q / mx) * (h - 2));
+    return `<rect x="${(i * bw + 1).toFixed(1)}" y="${(h - bh).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${bh.toFixed(1)}" rx="1" fill="${color}" opacity="${0.35 + 0.65 * x.q / mx}"><title>${esc(x.label)}: ${pct(x.q)}</title></rect>`;
+  }).join("")}</svg>`;
+}
+
+/* Price error: each bracket's price can sit anywhere a trade of S.errUsd would fill, on either side of the book.
+   Sampling those ranges and re-running the seat means gives an error that is wide for thin markets and tight for deep ones. */
+function fillAt(levels, usd, extreme){
+  let rem = usd, sh = 0;
+  for (const [p, s] of levels) { if (p <= 0) continue; const take = Math.min(rem, p * s); sh += take / p; rem -= take; if (rem <= 1e-9) break; }
+  const filled = usd - rem, vwap = sh ? filled / sh : extreme;
+  return (filled * vwap + rem * extreme) / usd; // dollars the book can't absorb are priced at 0 or 1
+}
+function priceBand(o, usd){
+  const b = BOOKS[o.tokens?.[0]];
+  let lo, hi;
+  if (b && (b.bids.length || b.asks.length)) { hi = fillAt(b.asks, usd, 1); lo = fillAt(b.bids, usd, 0); }
+  else { lo = isFinite(o.bid) ? o.bid : 0; hi = isFinite(o.ask) ? o.ask : 1; }
+  return [Math.min(lo, o.p), Math.max(hi, o.p)];
+}
+function bookDepth(o, cents = 0.05){
+  const b = BOOKS[o.tokens?.[0]]; if (!b) return o.liq || 0;
+  const near = (lv) => lv.filter(([p]) => Math.abs(p - o.p) <= cents).reduce((s, [p, q]) => s + p * q, 0);
+  return near(b.bids) + near(b.asks);
+}
+function errModel(){
+  const M = S.model, R = S.sim.parties, usd = S.errUsd, N = 400, rnd = mulberry32(4242);
+  // Half the draws fall below today's price and half above, so the error spreads around the estimate instead of shifting it.
+  const draw = (p, band) => rnd() < 0.5 ? p - rnd() * (p - band[0]) : p + rnd() * (band[1] - p);
+  const spec = PARTIES.map(p => {
+    const m = M[p.key];
+    if (m.sb) return { sb: m.sb.b.map(x => ({ mid: x.mid, p: x.p, band: priceBand(x, usd) })), depth: m.sb.b.reduce((s, x) => s + bookDepth(x), 0), raw0: m.sb.mean };
+    if (m.passMkt) { const pass = m.passMkt.p || 1e-6; return { pass, band: priceBand(m.passMkt, usd), per: R[p.key].mean / pass, depth: bookDepth(m.passMkt), raw0: R[p.key].mean }; }
+    return { raw0: R[p.key].mean, depth: 0 };
+  });
+  const raw0 = spec.map(x => x.raw0), tot0 = raw0.reduce((a, b) => a + b, 0);
+  const d = PARTIES.map(() => new Float64Array(N)), db = Object.fromEntries(Object.keys(BLOCS).map(b => [b, new Float64Array(N)]));
+  const raw = new Float64Array(PARTIES.length);
+  for (let i = 0; i < N; i++) {
+    let tot = 0;
+    spec.forEach((x, k) => {
+      if (x.sb) { let sp = 0, sm = 0; for (const y of x.sb) { const pr = draw(y.p, y.band); sp += pr; sm += pr * y.mid; } raw[k] = sp ? sm / sp : x.raw0; }
+      else if (x.band) raw[k] = draw(x.pass, x.band) * x.per;
+      else raw[k] = x.raw0;
+      tot += raw[k];
+    });
+    PARTIES.forEach((p, k) => { const v = raw[k] * 120 / tot - raw0[k] * 120 / tot0; d[k][i] = v; db[p.bloc][i] += v; });
+  }
+  const q = (a, p) => { const s = Array.from(a).sort((x, y) => x - y); return s[Math.floor(p * (s.length - 1))]; };
+  const out = { usd, parties: {}, blocs: {} };
+  PARTIES.forEach((p, k) => out.parties[p.key] = { lo: q(d[k], .1), hi: q(d[k], .9), depth: spec[k].depth });
+  for (const b in db) out.blocs[b] = { lo: q(db[b], .1), hi: q(db[b], .9) };
+  return out;
+}
+const errTxt = e => e ? `${e.lo >= 0 ? "+" : "−"}${Math.abs(e.lo).toFixed(1)} / ${e.hi >= 0 ? "+" : "−"}${Math.abs(e.hi).toFixed(1)}` : "—";
+function renderSeatTable(){
+  const M = S.model, R = S.sim.parties;
+  const rows = PARTIES.slice().sort((a, b) => R[b.key].mean - R[a.key].mean);
+  const maxS = Math.max(36, ...rows.map(p => R[p.key].p90 + 2));
+  const X = v => (v / maxS * 100).toFixed(2) + "%";
+  const ticks = [0, 4, 10, 20, 30].filter(t => t <= maxS);
+  let h = `<thead><tr><th>Party</th><th>Bloc</th><th class="r">Implied</th><th style="min-width:240px"><div class="wscale">${ticks.map(t => `<span style="left:${X(t)}">${t}</span>`).join("")}</div></th><th class="r">80% range</th><th class="r">Price error (80%)</th><th class="r">Book depth ±5¢</th><th>Brackets</th><th class="r">Seat mkt</th><th class="r">Vote-share route</th><th class="r">Exp. vote</th><th class="r">P(seats)</th><th class="r">24h</th></tr></thead><tbody>`;
+  for (const p of rows) {
+    const r = R[p.key], m = M[p.key], E = S.err?.parties[p.key];
+    const raw = m.sb ? m.sb.mean : null;
+    const passTxt = m.passMkt ? `${pct(r.pIn)}<div class="muted" style="font-size:.72rem">mkt ${pct(m.passMkt.p)}</div>` : pct(r.pIn);
+    h += `<tr class="click" data-party="${p.key}" tabindex="0">
+      <td><div class="pname"><i class="sw" style="background:${p.color}"></i>${esc(p.name)}</div></td>
+      <td><span class="pill ${p.bloc}">${p.bloc === "bibi" ? "Netanyahu" : p.bloc === "opp" ? "Opposition" : p.bloc === "arab" ? "Arab" : "Unaligned"}</span></td>
+      <td class="r"><span class="seatnum">${r.mean.toFixed(1)}</span></td>
+      <td><div class="whisk"><i class="axis"></i><i class="thr" style="left:${X(4)}" title="Threshold ≈ 4 seats"></i>
+        <i class="rng" style="left:${X(r.p10)};width:calc(${X(r.p90)} - ${X(r.p10)});background:${p.color}"></i>
+        ${E ? `<i class="err" style="left:${X(r.mean + E.lo)};width:calc(${X(r.mean + E.hi)} - ${X(r.mean + E.lo)})"></i>` : ""}
+        <i class="pt" style="left:${X(r.mean)};background:${p.color}"></i></div></td>
+      <td class="r num">${r.p10}–${r.p90}</td>
+      <td class="r num errcell"><span class="${E && E.hi - E.lo >= 2 ? "thin" : ""}">${errTxt(E)}</span></td>
+      <td class="r num muted">${E ? usd(E.depth) : "—"}</td>
+      <td>${spark(m.sb, p.color) || `<span class="muted" style="font-size:.75rem">no seat market</span>`}</td>
+      <td class="r num">${raw != null ? raw.toFixed(1) : "—"}${m.sb ? `<div class="muted" style="font-size:.7rem">Σ ${pct(m.sb.sum)}</div>` : ""}</td>
+      <td class="r num">${m.shareSeats != null ? m.shareSeats.toFixed(1) : "—"}</td>
+      <td class="r num">${m.shareMean != null ? m.shareMean.toFixed(1) + "%" : "—"}</td>
+      <td class="r num">${passTxt}</td>
+      <td class="r">${m.sb ? `<span class="chg ${m.sb.d1 > 0.05 ? "up" : m.sb.d1 < -0.05 ? "down" : "muted"}">${m.sb.d1 >= 0 ? "+" : "−"}${Math.abs(m.sb.d1).toFixed(1)}</span>` : ""}</td></tr>`;
+  }
+  const rawTot = PARTIES.reduce((s, p) => s + (S.model[p.key].sb ? S.model[p.key].sb.mean : 0), 0);
+  h += `</tbody><tfoot><tr><td colspan="2" class="muted">Total</td><td class="r"><span class="seatnum">120</span></td><td colspan="5" class="muted" style="font-size:.8rem">Before rescaling, the seat markets add up to <b class="num">${S.sim.rawMean.toFixed(1)}</b> seats on average (${S.sim.rawMean > 120 ? "over" : "under"}-allocated by ${Math.abs(S.sim.rawMean - 120).toFixed(1)}).</td><td class="r num">${rawTot.toFixed(1)}</td><td colspan="4" class="muted" style="font-size:.78rem">Below-threshold vote: ${S.model.below.toFixed(1)}%</td></tr></tfoot>`;
+  $("#seatTable").innerHTML = h;
+}
+
+function histSVG(arr, color, label, threshold){
+  const lo = 30, hi = 80, counts = new Array(hi - lo + 1).fill(0);
+  for (let i = 0; i < arr.length; i++) { const v = Math.max(lo, Math.min(hi, arr[i])); counts[v - lo]++; }
+  const mx = Math.max(...counts) || 1, W = 520, H = 120, pad = 18, bw = (W) / counts.length;
+  let s = `<svg class="hist" viewBox="0 0 ${W} ${H + pad}" role="img" aria-label="${esc(label)} distribution">`;
+  counts.forEach((c, i) => {
+    const v = i + lo, h = c / mx * (H - 16);
+    s += `<rect x="${(i * bw + 0.5).toFixed(1)}" y="${(H - h).toFixed(1)}" width="${(bw - 1).toFixed(1)}" height="${h.toFixed(1)}" fill="${v >= threshold ? color : "var(--line)"}"><title>${v} seats: ${pct(c / arr.length, 1)}</title></rect>`;
+  });
+  const x61 = (threshold - lo) * bw;
+  s += `<line x1="${x61}" x2="${x61}" y1="0" y2="${H}" stroke="var(--ink)" stroke-dasharray="3 3"/><text x="${x61 + 4}" y="11" font-size="11" fill="var(--ink)" font-family="IBM Plex Mono, monospace">61</text>`;
+  [30, 40, 50, 60, 70, 80].forEach(t => s += `<text x="${((t - lo) * bw + bw / 2).toFixed(1)}" y="${H + 13}" font-size="10" text-anchor="middle" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${t}</text>`);
+  s += `</svg>`;
+  const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+  return `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px"><span style="font-weight:500"><i class="sw" style="background:${color}"></i>${esc(label)}</span><span class="num muted" style="font-size:.8rem">mean ${mean.toFixed(1)}</span></div>${s}`;
+}
+
+function cmpRow(title, model, market, note){
+  const gap = market != null ? (model - market) * 100 : null;
+  return `<div class="crow"><div><div style="font-weight:500">${title}</div>${note ? `<div class="muted" style="font-size:.76rem">${note}</div>` : ""}</div>
+    <div class="cbars">
+      <div class="cbar"><span>Model</span><div class="lbar"><span style="width:${(model * 100).toFixed(1)}%;background:var(--accent)"></span></div><span class="v">${pct(model)}</span></div>
+      <div class="cbar"><span>Market</span><div class="lbar"><span style="width:${((market ?? 0) * 100).toFixed(1)}%;background:var(--muted)"></span></div><span class="v">${pct(market)}</span></div>
+    </div>
+    <span class="gap" title="Model minus market">${gap == null ? "—" : (gap >= 0 ? "+" : "−") + Math.abs(gap).toFixed(1) + " pts"}</span></div>`;
+}
+
+function renderBlocs(){
+  const sim = S.sim;
+  $("#histBibi").innerHTML = histSVG(sim.blocs.bibi, css("--bibi"), "Netanyahu bloc seats", 61);
+  $("#histOpp").innerHTML = histSVG(sim.blocs.opp, css("--opp"), "Opposition bloc seats", 61);
+  const arabMean = sim.blocs.arab.reduce((a, b) => a + b, 0) / NSIM;
+  $("#blocKV").innerHTML = `
+    <div><b>${pct(sim.pBibi61)}</b><span>Netanyahu bloc reaches 61</span></div>
+    <div><b>${pct(sim.pOpp61)}</b><span>Opposition bloc reaches 61</span></div>
+    <div><b>${pct(sim.pOppMore)}</b><span>Opposition bloc is bigger</span></div>
+    <div><b>${arabMean.toFixed(1)}</b><span>Arab party seats (kingmaker pool)</span></div>`;
+  const mk = outs(EV.margin);
+  const order = ["Bibi 7+ seats", "Bibi 5-6 seats", "Bibi 3-4 seats", "Bibi 1-2 seats", "Tie", "Opposition 1-2 seats", "Opposition 3-4 seats", "Opposition 5-6 seats", "Opposition 7+ seats"];
+  const msum = mk.reduce((s, o) => s + o.p, 0) || 1;
+  $("#marginCmp").innerHTML = order.map(k => {
+    const o = mk.find(x => x.label === k);
+    return cmpRow(k.replace("Bibi", "Netanyahu bloc by").replace("Opposition", "Opposition by").replace(" seats", ""), sim.marg[k] || 0, o ? o.p / msum : null, o ? `raw price ${pct(o.p)} · vol ${usd(o.vol)}` : "");
+  }).join("") + `<div class="muted" style="font-size:.76rem">Market prices normalised from a ${pct(msum)} total.</div>`;
+}
+
+function renderCheck(){
+  const sim = S.sim, R = sim.parties, rows = [];
+  const bloc = one(EV.bloc);
+  if (bloc) rows.push(cmpRow("Opposition bloc wins more seats", sim.pOppMore + sim.pTie / 2, bloc.prices[1], "Ties split evenly in the model"));
+  const maj = one(EV.majority); if (maj) rows.push(cmpRow("Either bloc reaches 61", sim.pAny61, maj.p));
+  const ll = one(EV.likudLose); if (ll) rows.push(cmpRow("Likud wins under 32 seats", sumWhere("likud", v => v < 32), ll.p));
+  for (const o of outs(EV.winner).filter(o => o.p >= 0.02)) { const p = partyByLabel(o.label); if (p) rows.push(cmpRow(`${p.name} wins the most seats`, R[p.key].rank[0], o.p)); }
+  const s2 = outs(EV.second).sort((a, b) => b.p - a.p)[0]; if (s2) { const p = partyByLabel(s2.label); if (p) rows.push(cmpRow(`${p.name} finishes 2nd`, R[p.key].rank[1], s2.p)); }
+  const s3 = outs(EV.third).sort((a, b) => b.p - a.p)[0]; if (s3) { const p = partyByLabel(s3.label); if (p) rows.push(cmpRow(`${p.name} finishes 3rd`, R[p.key].rank[2], s3.p)); }
+  for (const p of PARTIES) { const m = S.model[p.key]; if (m.passMkt && m.sb) rows.push(cmpRow(`${p.name} clears the threshold`, R[p.key].pIn, m.passMkt.p, "Seat market vs “wins a seat” market")); }
+  $("#checkCmp").innerHTML = rows.join("");
+}
+
+function renderRanks(){
+  const R = S.sim.parties;
+  const rows = PARTIES.filter(p => R[p.key].rank.some(x => x >= 0.01)).sort((a, b) => R[b.key].mean - R[a.key].mean);
+  const mk = [EV.winner, EV.second, EV.third, EV.fourth].map(s => outs(s));
+  let h = `<thead><tr><th>Party</th>${["1st", "2nd", "3rd", "4th"].map(x => `<th class="r">${x}</th>`).join("")}</tr></thead><tbody>`;
+  for (const p of rows) {
+    h += `<tr><td><div class="pname"><i class="sw" style="background:${p.color}"></i>${esc(p.name)}</div></td>`;
+    for (let r = 0; r < 4; r++) {
+      const v = R[p.key].rank[r], o = mk[r].find(x => partyByLabel(x.label) === p);
+      const bg = `color-mix(in srgb, ${p.color} ${Math.round(v * 55)}%, transparent)`;
+      h += `<td class="r num" style="background:${bg}">${pct(v)}${o ? `<div class="muted" style="font-size:.72rem">mkt ${pct(o.p)}</div>` : ""}</td>`;
+    }
+    h += `</tr>`;
+  }
+  $("#rankTable").innerHTML = h + `</tbody>`;
+}
+
+function ladder(slug, { sort = true, max = 6, title, labelFn } = {}){
+  const list = outs(slug); if (!list.length) return "";
+  const xs = (sort ? list.slice().sort((a, b) => b.p - a.p) : list).slice(0, max);
+  const e = S.ev[slug];
+  return `<div class="card"><h3>${esc(title || e.title)}</h3><div class="ladder">${xs.map((o, i) => `<div class="lrow"><span class="lab" title="${esc(o.label)}">${esc(labelFn ? labelFn(o) : o.label)}</span><div class="lbar"><span style="width:${(o.p * 100).toFixed(1)}%;background:${colorFor(o.label, i)}"></span></div><span class="lval">${pct(o.p)} ${chg(o.d1)}</span></div>`).join("")}</div>
+    <div class="muted" style="font-size:.74rem;margin-top:8px">Vol ${usd(+e.volume || 0)} · 24h ${usd(+e.volume24hr || 0)}${list.length > 1 ? ` · Σ ${pct(list.reduce((s, o) => s + o.p, 0))}` : ""}</div></div>`;
+}
+function renderGov(){
+  const yn = o => o.label.length > 40 ? "Yes" : o.label;
+  $("#govCards").innerHTML = [
+    ladder(EV.pm, { title: "Prime Minister after the election" }),
+    ladder(EV.mandate, { title: "First mandate to form a government" }),
+    ladder(EV.elections, { sort: false, title: "More elections before a government forms" }),
+    ladder(EV.formedBy, { sort: false, title: "New government sworn in by…" }),
+    ladder(EV.likudYashar, { title: "Likud or Yashar in the next government?", labelFn: yn }),
+    ladder(EV.defense, { title: "Next Minister of Defense", max: 5 }),
+    ladder(EV.finance, { title: "Next Minister of Finance", max: 5 }),
+    ladder(EV.foreign, { title: "Next Minister of Foreign Affairs", max: 5 }),
+    ladder(EV.interior, { title: "Next Minister of Interior", max: 5 }),
+    ladder(EV.bibiOut, { sort: false, title: "Netanyahu out as PM by…" }),
+    ladder(EV.confidence, { title: "Knesset confidence vote by 31 Dec", labelFn: yn }),
+    ladder(EV.confidencePass, { title: "Confidence vote passes by 31 Dec", labelFn: yn }),
+  ].join("");
+}
+function renderVote(){
+  const shareCards = PARTIES.filter(p => p.share).map(p => ladder(p.share, { sort: false, title: `${p.name} vote share` }));
+  $("#voteCards").innerHTML = [
+    ladder(EV.turnout, { sort: false, title: "Turnout" }),
+    ladder(EV.turnoutDir, { sort: false, title: "Turnout (directional)" }),
+    ladder(EV.below, { sort: false, title: "Share of vote below the 3.25% threshold" }),
+    ladder(EV.shareMargin, { sort: false, title: "Vote-share margin of victory" }),
+    ladder(EV.pass, { title: "Wins at least one seat" }),
+    ...shareCards,
+    ladder(EV.bw, { sort: false, title: "Blue and White vote share" }),
+    ladder(EV.unity, { sort: false, title: "Unity vote share" }),
+  ].join("");
+}
+
+function renderRaw(){
+  const f = ($("#rawSearch").value || "").toLowerCase();
+  const open = new Set([...document.querySelectorAll("details.ev[open]")].map(d => d.dataset.slug));
+  const evs = Object.values(S.ev).sort((a, b) => (+b.volume || 0) - (+a.volume || 0));
+  $("#rawList").innerHTML = evs.map(e => {
+    const list = outs(e.slug);
+    if (!list.length) return "";
+    if (f && !(e.title.toLowerCase().includes(f) || list.some(o => o.label.toLowerCase().includes(f)))) return "";
+    const rows = list.map(o => `<tr><td>${esc(o.label.length > 60 ? o.outcomes[0] : o.label)}</td><td class="r num">${pct(o.p, 1)}</td><td class="r num">${isNaN(o.bid) ? "—" : (o.bid * 100).toFixed(1)} / ${isNaN(o.ask) ? "—" : (o.ask * 100).toFixed(1)}</td><td class="r num">${isNaN(o.last) ? "—" : (o.last * 100).toFixed(1)}</td><td class="r">${chg(o.h1)}</td><td class="r">${chg(o.d1)}</td><td class="r">${chg(o.w1)}</td><td class="r num">${usd(o.vol24)}</td><td class="r num">${usd(o.vol)}</td><td class="r num">${usd(o.liq)}</td></tr>`).join("");
+    return `<details class="ev" data-slug="${esc(e.slug)}" ${open.has(e.slug) || f ? "open" : ""}><summary><span class="t">${esc(e.title)}</span><span class="m">${list.length} mkts · vol ${usd(+e.volume || 0)} · 24h ${usd(+e.volume24hr || 0)}</span><a class="m" href="https://polymarket.com/event/${esc(e.slug)}" target="_blank" rel="noopener">polymarket ↗</a></summary>
+      <div class="tscroll"><table><thead><tr><th>Outcome</th><th class="r">Price</th><th class="r">Bid / Ask</th><th class="r">Last</th><th class="r">1h</th><th class="r">24h</th><th class="r">1w</th><th class="r">Vol 24h</th><th class="r">Vol</th><th class="r">Liquidity</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+  }).join("");
+}
+
+function renderMast(){
+  let n = 0, vol = 0, v24 = 0;
+  for (const e of Object.values(S.ev)) { const l = outs(e.slug); n += l.length; vol += +e.volume || 0; v24 += +e.volume24hr || 0; }
+  $("#mcount").textContent = n; $("#mvol").textContent = usd(vol); $("#mvol24").textContent = usd(v24);
+}
+
+/* ---------- live chart ---------- */
+/* windowMs: a sliding window that follows "now". History is per-minute at best; ticks fill in the rest. */
+const RANGES = {
+  "10m": { interval:"1h", fidelity:1, label:"10M", windowMs:10 * 60e3 },
+  "1h": { interval:"1h", fidelity:1, label:"1H", windowMs:60 * 60e3 },
+  "6h": { interval:"6h", fidelity:1, label:"6H", windowMs:6 * 60 * 60e3 },
+  "1d": { interval:"1d", fidelity:1, label:"1D" }, "1w": { interval:"1w", fidelity:5, label:"1W" }, "1m": { interval:"1m", fidelity:30, label:"1M" }, "max": { interval:"max", fidelity:60, label:"All" },
+};
+const TICKS = [[100, "0.1s"], [1000, "1s"], [5000, "5s"], [15000, "15s"]];
+function featuredList(){
+  return [
+    { id:"winner", label:"Most seats", slug:EV.winner },
+    { id:"pm", label:"Next PM", slug:EV.pm },
+    { id:"bloc", label:"Bigger bloc", slug:EV.bloc, both:true },
+    { id:"mandate", label:"First mandate", slug:EV.mandate },
+    { id:"ingov", label:"In government", slug:EV.inGov },
+    { id:"formed", label:"Government formed by", slug:EV.formedBy },
+    { id:"majority", label:"61+ majority", slug:EV.majority },
+    { id:"hung", label:"Hung parliament", slug:EV.hung },
+    { id:"second", label:"2nd place", slug:EV.second },
+    { id:"third", label:"3rd place", slug:EV.third },
+    { id:"turnout", label:"Turnout", slug:EV.turnout },
+    ...PARTIES.filter(p => p.seats).map(p => ({ id:"seats:" + p.key, label:`${p.name} seats`, slug:p.seats, party:p, hidden: !["likud", "yashar", "together"].includes(p.key) })),
+  ];
+}
+function seriesFor(f){
+  const list = outs(f.slug);
+  if (f.both && list[0]) return list[0].outcomes.map((lab, i) => ({ label: lab === "Opp." ? "Opposition" : lab === "Bibi" ? "Netanyahu bloc" : lab, token: list[0].tokens[i], color: colorFor(lab, i), p: list[0].prices[i] }));
+  if (list.length === 1) return [{ label: list[0].outcomes[0] === "Yes" ? "Yes" : list[0].label, token: list[0].tokens[0], color: css("--accent"), p: list[0].p }];
+  let xs = f.party ? list : list.slice().sort((a, b) => b.p - a.p).filter((o, i) => i < 3 || o.p >= 0.02).slice(0, 8);
+  return xs.map((o, i) => ({ label: o.label, token: o.tokens[0], color: f.party ? bracketColor(f.party.color, i, xs.length) : colorFor(o.label, i), p: o.p, d1: o.d1 }));
+}
+/* Low brackets light, high brackets dark: a ramp through the party's own colour. */
+function hexMix(a, b, t){
+  const h = s => [1, 3, 5].map(i => parseInt(s.slice(i, i + 2), 16));
+  const A = h(a), B = h(b);
+  return "#" + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, "0")).join("");
+}
+function bracketColor(base, i, n){
+  const t = n > 1 ? i / (n - 1) : 0.5;
+  return t < 0.5 ? hexMix(base, "#e8e2d0", 0.75 * (1 - t * 2)) : hexMix(base, "#0b1430", 0.7 * (t - 0.5) * 2);
+}
+
+function chartTheme(){
+  return { grid: css("--line"), text: css("--muted"), ink: css("--ink"), surface: css("--surface") };
+}
+const fmtTime = (ms, span) => { const d = new Date(ms); return span <= 30 * 60e3 ? d.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" }) : span < 2 * 864e5 ? d.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }) : d.toLocaleDateString([], { month:"short", day:"numeric" }); };
+function makeChart(canvas, yFmt, yOpts = {}){
+  const t = chartTheme();
+  return new Chart(canvas, {
+    type: "line",
+    data: { datasets: [] },
+    options: {
+      animation: false, responsive: true, maintainAspectRatio: false, parsing: false, normalized: true,
+      interaction: { mode: "nearest", axis: "x", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: t.surface, titleColor: t.ink, bodyColor: t.ink, borderColor: t.grid, borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true,
+          callbacks: { title: items => items.length ? new Date(items[0].parsed.x).toLocaleString([], { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit", second:"2-digit" }) : "", label: c => ` ${c.dataset.label}: ${yFmt(c.parsed.y)}` } },
+      },
+      scales: {
+        x: { type: "linear", grid: { color: t.grid, drawTicks: false }, border: { display: false },
+          ticks: { color: t.text, maxTicksLimit: 7, padding: 6, font: { family: "IBM Plex Mono", size: 10 }, callback(v){ const sc = this.chart.scales.x; return fmtTime(v, sc.max - sc.min); } } },
+        y: { grid: { color: t.grid, drawTicks: false }, border: { display: false }, ticks: { color: t.text, padding: 6, font: { family: "IBM Plex Mono", size: 10 }, callback: v => yFmt(v) }, ...yOpts },
+      },
+      elements: { line: { borderWidth: 2, tension: 0.15 }, point: { radius: c => c.dataIndex === c.dataset.data.length - 1 && !c.dataset.ref ? 3.5 : 0, hoverRadius: 4 } },
+    },
+  });
+}
+
+async function fetchHist(token, interval, fidelity){
+  // The CLOB history endpoint returns sporadic 500s under burst load; back off and retry.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try { const j = await getJSON(`${CLOB}/prices-history?market=${token}&interval=${interval}&fidelity=${fidelity}`); return j.history || []; }
+    catch { await new Promise(r => setTimeout(r, 400 * 2 ** attempt + Math.random() * 300)); }
+  }
+  return [];
+}
+async function pool(items, n, fn){
+  const out = new Array(items.length); let i = 0;
+  await Promise.all(Array.from({ length: n }, async () => { while (i < items.length) { const k = i++; out[k] = await fn(items[k]); } }));
+  return out;
+}
+
+function renderTabs(){
+  const fl = featuredList();
+  const cur = fl.find(f => f.id === S.featured);
+  $("#tabs").innerHTML = fl.filter(f => !f.hidden || f.id === S.featured).map(f => `<button type="button" data-f="${f.id}" aria-pressed="${f.id === S.featured}">${esc(f.label)}</button>`).join("");
+  $("#rangeSeg").innerHTML = Object.entries(RANGES).map(([k, r]) => `<button type="button" data-r="${k}" aria-pressed="${k === S.range}">${r.label}</button>`).join("");
+  $("#tickSeg").innerHTML = `<span class="seglab">Tick</span>` + TICKS.map(([ms, l]) => `<button type="button" data-tick="${ms}" aria-pressed="${ms === S.tickMs}">${l}</button>`).join("");
+  if (cur) { $("#livetitle").textContent = S.ev[cur.slug]?.title || cur.label; renderLiveSub(); }
+}
+function renderLiveSub(){
+  const cur = featuredList().find(f => f.id === S.featured); if (!cur) return;
+  const feed = WS.open ? `order-book feed live · ${WS.rate.toFixed(0)} updates/s` : "order-book feed reconnecting · using 15s polls";
+  $("#livesub").innerHTML = `Vol ${usd(+S.ev[cur.slug]?.volume || 0)} · 24h ${usd(+S.ev[cur.slug]?.volume24hr || 0)} · a point every ${S.tickMs < 1000 ? S.tickMs / 1000 + "s" : S.tickMs / 1000 + "s"} · <span style="color:var(${WS.open ? "--up" : "--down"})">${feed}</span>`;
+}
+/* Sliding windows pin the x-axis to [now - window, now] and drop points that scroll off. */
+function applyWindow(chart, win, now){
+  if (!chart) return;
+  const x = chart.options.scales.x;
+  if (!win) { x.min = undefined; x.max = undefined; return; }
+  x.min = now - win; x.max = now;
+  const cut = now - win * 1.05;
+  for (const d of chart.data.datasets) {
+    if (d.ref) continue;
+    let i = 0; while (i < d.data.length - 1 && d.data[i + 1].x < cut) i++;
+    if (i > 0) d.data.splice(0, i);
+  }
+}
+async function loadLive(){
+  const seq = ++S.loadSeq;
+  const f = featuredList().find(x => x.id === S.featured) || featuredList()[0];
+  const series = seriesFor(f);
+  renderTabs();
+  $("#liveLoading").hidden = false;
+  const r = RANGES[S.range];
+  const hist = await Promise.all(series.map(s => fetchHist(s.token, r.interval, r.fidelity)));
+  if (seq !== S.loadSeq) return;
+  S.liveSeries = series;
+  if (!S.liveChart) S.liveChart = makeChart($("#liveChart"), v => +v.toFixed(3) + "%",
+    { min: 0, suggestedMax: 100, afterDataLimits: sc => {
+      if (sc.options.bounds !== "data") return;
+      const pad = Math.max((sc.max - sc.min) * 0.08, 0.5);
+      sc.min = Math.max(0, sc.min - pad); sc.max = Math.min(100, sc.max + pad);
+    } });
+  const now = Date.now();
+  S.liveChart.data.datasets = series.map((s, i) => ({
+    label: s.label, borderColor: s.color, backgroundColor: s.color,
+    data: mergeTape(hist[i].map(h => ({ x: h.t * 1000, y: h.p * 100 })), s.token, r.windowMs, now).concat([{ x: now, y: (livePrice(s.token) ?? s.p) * 100 }]),
+    fill: false, token: s.token, stepped: r.windowMs ? "before" : false,
+  }));
+  applyWindow(S.liveChart, r.windowMs, now);
+  fitLiveY();
+  S.liveChart.update();
+  $("#liveLoading").hidden = true;
+  buildVel();
+  renderLiveLegend();
+  ensureWS();
+}
+function fitLiveY(){
+  // Short windows zoom the y-axis to the data so cent-level moves are visible.
+  const y = S.liveChart.options.scales.y;
+  if (RANGES[S.range].windowMs) { y.min = undefined; y.max = undefined; y.suggestedMax = undefined; y.bounds = "data"; return; }
+  y.min = 0; y.bounds = "ticks";
+  const ys = S.liveChart.data.datasets.flatMap(d => d.data.map(p => p.y));
+  const maxY = Math.max(...ys, 1);
+  S.liveChart.options.scales.y.max = maxY > 60 ? 100 : Math.min(100, Math.ceil(maxY / 10) * 10 + 10);
+}
+function renderLiveLegend(){
+  const ds = S.liveChart?.data.datasets || [], now = Date.now();
+  $("#liveLegend").innerHTML = ds.map(d => {
+    const first = d.data[0]?.y ?? 0, last = d.data[d.data.length - 1]?.y ?? 0;
+    return `<span class="li"><i class="sw" style="background:${d.borderColor}"></i>${esc(d.label)} <b>${last.toFixed(3)}%</b> ${chg((last - first) / 100)}<span class="muted" style="font-size:.72rem">${RANGES[S.range].label}</span>
+      ${velTag(velocity(d.token, 1000, now, d.data), "1s")} ${velTag(velocity(d.token, 60000, now, d.data), "1m")}</span>`;
+  }).join("");
+}
+/* Keep at most ~6,000 points per visible span: a new point closer than the gap replaces the last one. */
+function minGap(win, data, now){ return (win || (data.length ? now - data[0].x : 0)) / 6000; }
+function pushPoint(data, x, y, gap){
+  // 0.75 tolerates timer jitter so a 0.1s tick on a 10-minute window still keeps every point.
+  if (data.length >= 2 && x - data[data.length - 2].x < gap * 0.75) data[data.length - 1] = { x, y };
+  else data.push({ x, y });
+}
+function tickLive(now){
+  if (!S.liveChart || !S.liveChart.data.datasets.length) return;
+  const win = RANGES[S.range].windowMs;
+  for (const d of S.liveChart.data.datasets) {
+    const p = livePrice(d.token); if (p == null) continue;
+    pushPoint(d.data, now, p * 100, minGap(win, d.data, now));
+  }
+  applyWindow(S.liveChart, win, now);
+  S.liveChart.update("none");
+  tickVel(now);
+}
+
+/* ---------- velocity: change in points over a trailing window, read from the tick-by-tick tape ---------- */
+const VEL_WINDOWS = [[1000, "1s"], [60000, "1m"]];
+function stepAt(arr, t, key){
+  let lo = 0, hi = arr.length - 1, r = -1;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if ((key ? arr[m][key] : arr[m]) <= t) { r = m; lo = m + 1; } else hi = m - 1; }
+  return r;
+}
+// Price at time t: the websocket tape where it reaches back far enough, else the chart's own history.
+function priceAt(token, t, data){
+  const tp = WS.tape[token];
+  if (tp && tp.length && t >= tp[0].t) return tp[stepAt(tp, t, "t")][S.priceMode];
+  if (data && data.length) { const i = stepAt(data, t, "x"); if (i >= 0) return data[i].y / 100; }
+  return tp && tp.length ? tp[0][S.priceMode] : null;
+}
+/* Replay the tape after the last history point, so tick-level data survives range and mode switches. */
+function mergeTape(pts, token, win, now){
+  const tp = WS.tape[token]; if (!tp) return pts;
+  const lastT = pts.length ? pts[pts.length - 1].x : 0;
+  for (let i = Math.max(0, stepAt(tp, lastT, "t") + 1); i < tp.length; i++) {
+    const v = tp[i][S.priceMode]; if (v != null) pushPoint(pts, tp[i].t, v * 100, minGap(win, pts, now));
+  }
+  return pts;
+}
+const fmtDur = ms => ms < 1000 ? `${+ms.toFixed(1)}ms` : ms < 60e3 ? `${+(ms / 1000).toFixed(3)}s` : ms < 3600e3 ? `${+(ms / 60e3).toFixed(3)}min` : `${+(ms / 3600e3).toFixed(3)}h`;
+const PER_NAMES = { 1000: "s", 60000: "min", 3600000: "h" };
+function velUnit(){ return S.velPer ? `pts/${PER_NAMES[S.velPer]}` : `pts per ${fmtDur(S.velW)}`; }
+// Change over the window, optionally scaled to a rate per second, minute or hour.
+function velScaled(token, now, data){
+  const v = velocity(token, S.velW, now, data);
+  return v == null ? null : S.velPer ? v * S.velPer / S.velW : v;
+}
+const sigFmt = v => { const a = Math.abs(v), d = a >= 10 ? 1 : a >= 1 ? 2 : a >= 0.1 ? 3 : a >= 0.01 ? 4 : 5; return (+v.toFixed(d)).toString(); };
+function velocity(token, w, now, data){
+  // History is Polymarket's own price; the tape can be another measure. A window straddling the two
+  // would report the switch as movement, so it stays blank until the tape covers the whole window.
+  const tp = WS.tape[token], t0 = tp && tp.length ? tp[0].t : Infinity;
+  if (S.priceMode !== "display" && (now >= t0) !== (now - w >= t0)) return null;
+  const a = priceAt(token, now, data), b = priceAt(token, now - w, data);
+  return a == null || b == null ? null : (a - b) * 100;
+}
+function velTag(v, unit){
+  if (v == null) return "";
+  const cls = v > 0.004 ? "up" : v < -0.004 ? "down" : "muted";
+  const arrow = v > 0.004 ? "▲" : v < -0.004 ? "▼" : "▬";
+  return `<span class="vel-tag chg ${cls}" title="Change over the last ${unit}, in percentage points">${arrow} ${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(3)}/${unit}</span>`;
+}
+function velPoints(d){
+  const out = [];
+  for (const pt of d.data) { const v = velScaled(d.token, pt.x, d.data); if (v != null) out.push({ x: pt.x, y: v }); }
+  return out;
+}
+function buildVel(){
+  if (!S.liveChart) return;
+  if (!S.velChart) S.velChart = makeChart($("#velChart"), v => (v > 0 ? "+" : "") + sigFmt(v), { grid: { drawTicks: false, color: c => c.tick && c.tick.value === 0 ? css("--muted") : css("--line") } });
+  S.velChart.options.plugins.tooltip.callbacks.label = c => ` ${c.dataset.label}: ${c.parsed.y >= 0 ? "+" : "−"}${sigFmt(Math.abs(c.parsed.y))} ${velUnit()}`;
+  S.velChart.data.datasets = S.liveChart.data.datasets.map(d => ({ label: d.label, borderColor: d.borderColor, backgroundColor: d.borderColor, token: d.token, src: d, data: velPoints(d), borderWidth: 1.5 }));
+  syncVelX();
+  S.velChart.update();
+  $("#velUnitLabel").textContent = velUnit();
+}
+function syncVelX(){
+  const lx = S.liveChart.scales.x, vx = S.velChart.options.scales.x;
+  const win = RANGES[S.range].windowMs, now = Date.now();
+  if (win) { vx.min = now - win; vx.max = now; applyWindow(S.velChart, win, now); }
+  else { vx.min = lx ? lx.min : undefined; vx.max = lx ? lx.max : undefined; }
+}
+function tickVel(now){
+  if (!S.velChart || !S.velChart.data.datasets.length) return;
+  const win = RANGES[S.range].windowMs;
+  for (const d of S.velChart.data.datasets) {
+    const v = velScaled(d.token, now, d.src.data);
+    if (v != null) pushPoint(d.data, now, v, minGap(win, d.data, now));
+  }
+  syncVelX();
+  S.velChart.update("none");
+}
+
+/* ---------- order-book websocket ---------- */
+// The full book is rebuilt from the "book" snapshot plus every level change, so best bid/ask sizes are known.
+const WS = { sock:null, subKey:"", open:false, book:{}, tape:{}, msgs:0, rate:0, ping:null, retry:null };
+const PRICE_MODES = {
+  micro: "Microprice (size-weighted)",
+  mid: "Midpoint",
+  display: "Polymarket price",
+  last: "Last trade",
+};
+function bookOf(t){ return WS.book[t] || (WS.book[t] = { bids: new Map(), asks: new Map(), bid:null, ask:null, bidSz:0, askSz:0, last:null }); }
+function bookTop(b){
+  let bid = null, bs = 0, ask = null, as = 0;
+  for (const [p, s] of b.bids) if (bid == null || p > bid) { bid = p; bs = s; }
+  for (const [p, s] of b.asks) if (ask == null || p < ask) { ask = p; as = s; }
+  b.bid = bid; b.bidSz = bs; b.ask = ask; b.askSz = as;
+}
+function modePrice(b, mode){
+  if (!b) return null;
+  const two = b.bid != null && b.ask != null;
+  if (mode === "last") return b.last;
+  if (mode === "mid") return two ? (b.bid + b.ask) / 2 : b.last;
+  // Microprice leans toward the side with less resting size: a heavy bid pushes the fair price up toward the ask.
+  if (mode === "micro") return two && b.bidSz + b.askSz > 0 ? (b.bid * b.askSz + b.ask * b.bidSz) / (b.bidSz + b.askSz) : b.last;
+  // Polymarket's own rule: midpoint while the spread is 10¢ or tighter, otherwise the last trade.
+  return two && b.ask - b.bid <= 0.1 + 1e-9 ? (b.bid + b.ask) / 2 : b.last;
+}
+function livePrice(token, mode = S.priceMode){ return modePrice(WS.book[token], mode) ?? S.tok[token]; }
+function tapePush(token, now){
+  const e = { t: now };
+  for (const k in PRICE_MODES) e[k] = livePrice(token, k);
+  if (e.display == null) return;
+  const a = WS.tape[token] || (WS.tape[token] = []), l = a[a.length - 1];
+  if (l && Object.keys(PRICE_MODES).every(k => Math.abs((l[k] ?? 0) - (e[k] ?? 0)) < 1e-12)) return;
+  a.push(e);
+  if (a.length > 60000) a.splice(0, 15000);
+}
+function wsTokens(){
+  const set = new Set((S.liveChart?.data.datasets || []).map(d => d.token).filter(Boolean));
+  outs(EV.pm).sort((a, b) => b.p - a.p).slice(0, 6).forEach(o => set.add(o.tokens[0]));
+  if (S.model) for (const p of PARTIES) {
+    const m = S.model[p.key];
+    if (m.sb) m.sb.b.forEach(x => set.add(x.tokens[0]));
+    else if (m.passMkt) set.add(m.passMkt.tokens[0]);
+  }
+  return [...set];
+}
+function ensureWS(){
+  const toks = wsTokens(); if (!toks.length) return;
+  const key = toks.slice().sort().join(",");
+  if (WS.sock && WS.subKey === key && WS.sock.readyState <= 1) return;
+  if (WS.sock) { WS.sock.onclose = null; try { WS.sock.close(); } catch {} }
+  clearInterval(WS.ping); clearTimeout(WS.retry);
+  WS.subKey = key; WS.open = false;
+  const ws = new WebSocket("wss://ws-subscriptions-clob.polymarket.com/ws/market");
+  WS.sock = ws;
+  ws.onopen = () => { WS.open = true; ws.send(JSON.stringify({ assets_ids: toks, type: "market" })); WS.ping = setInterval(() => { if (ws.readyState === 1) ws.send("PING"); }, 10000); renderLiveSub(); };
+  ws.onmessage = e => {
+    if (typeof e.data !== "string" || e.data[0] !== "[" && e.data[0] !== "{") return;
+    let msg; try { msg = JSON.parse(e.data); } catch { return; }
+    for (const m of Array.isArray(msg) ? msg : [msg]) wsHandle(m);
+  };
+  ws.onclose = () => { WS.open = false; clearInterval(WS.ping); renderLiveSub(); WS.retry = setTimeout(() => { WS.subKey = ""; ensureWS(); }, 2000); };
+  ws.onerror = () => {};
+}
+function wsHandle(m){
+  WS.msgs++;
+  const now = Date.now();
+  if (m.bids || m.asks) {
+    const b = bookOf(m.asset_id);
+    b.bids = new Map((m.bids || []).map(x => [+x.price, +x.size]).filter(x => x[1] > 0));
+    b.asks = new Map((m.asks || []).map(x => [+x.price, +x.size]).filter(x => x[1] > 0));
+    if (m.last_trade_price) b.last = +m.last_trade_price;
+    bookTop(b);
+    tapePush(m.asset_id, now);
+  } else if (m.event_type === "price_change" && m.price_changes) {
+    for (const c of m.price_changes) {
+      const b = bookOf(c.asset_id), price = +c.price, size = +c.size;
+      const side = c.side === "BUY" ? b.bids : b.asks;
+      if (size > 0) side.set(price, size); else side.delete(price);
+      // The message's best bid/ask is authoritative: drop any stale levels that cross it.
+      if (c.best_bid != null) { const bb = +c.best_bid; for (const p of b.bids.keys()) if (p > bb + 1e-9) b.bids.delete(p); }
+      if (c.best_ask != null) { const ba = +c.best_ask; for (const p of b.asks.keys()) if (p < ba - 1e-9) b.asks.delete(p); }
+      bookTop(b);
+      tapePush(c.asset_id, now);
+    }
+  } else if (m.event_type === "last_trade_price") {
+    bookOf(m.asset_id).last = +m.price;
+    tapePush(m.asset_id, now);
+  }
+}
+setInterval(() => { WS.rate = WS.msgs / 2; WS.msgs = 0; if (S.lastOk) renderLiveSub(); }, 2000);
+
+/* ---------- tick loop: one point per series per tick, on both charts ---------- */
+let tickTimer = null, lastLegend = 0;
+function startTicks(){
+  clearInterval(tickTimer);
+  tickTimer = setInterval(() => {
+    if (!S.model) return;
+    const now = Date.now();
+    tickLive(now); tickTrend(now);
+    if (now - lastLegend > 250) { lastLegend = now; renderLiveLegend(); renderTrendLegend(); updatePmLive(); }
+  }, S.tickMs);
+}
+
+/* ---------- trend ---------- */
+const TREND_RANGES = {
+  "10m": { interval:"1h", fidelity:1, label:"10M", windowMs:10 * 60e3 },
+  "1h": { interval:"1h", fidelity:1, label:"1H", windowMs:60 * 60e3 },
+  "6h": { interval:"6h", fidelity:1, label:"6H", windowMs:6 * 60 * 60e3 },
+  "1d": { interval:"1d", fidelity:1, label:"1D" },
+  "1w": { interval:"1w", fidelity:15, label:"1W" }, "1m": { interval:"1m", fidelity:60, label:"1M" }, "max": { interval:"max", fidelity:180, label:"All" },
+};
+/* Expected seats from the latest order-book prices of every bracket, normalised to 120. */
+function expectedNow(){
+  const M = S.model, means = {};
+  for (const p of PARTIES) {
+    const m = M[p.key];
+    if (m.sb) { let s = 0, w = 0; for (const x of m.sb.b) { const v = livePrice(x.tokens[0]) ?? x.p; s += v * x.mid; w += v; } means[p.key] = w ? s / w : m.sb.mean; }
+    else means[p.key] = m.passMkt ? (livePrice(m.passMkt.tokens[0]) ?? m.passMkt.p) * 4.5 : 0;
+  }
+  const tot = Object.values(means).reduce((a, b) => a + b, 0) || 1;
+  for (const k in means) means[k] *= 120 / tot;
+  return means;
+}
+async function loadTrend(){
+  const seq = ++S.trendSeq;
+  $("#trendLoading").hidden = false; $("#trendLoading").textContent = "Fetching 60+ bracket histories…";
+  renderTrendControls();
+  const r = TREND_RANGES[S.trendRange], M = S.model;
+  const jobs = [];
+  for (const p of PARTIES) {
+    if (M[p.key].sb) M[p.key].sb.b.forEach(x => jobs.push({ key: p.key, mid: x.mid, token: x.tokens[0] }));
+    else if (M[p.key].passMkt) jobs.push({ key: p.key, pass: true, token: M[p.key].passMkt.tokens[0] });
+  }
+  const hs = await pool(jobs, 5, j => fetchHist(j.token, r.interval, r.fidelity));
+  if (seq !== S.trendSeq) return;
+  const step = r.fidelity * 60, tset = new Set();
+  hs.forEach(h => h.forEach(pt => tset.add(Math.round(pt.t / step) * step)));
+  const times = [...tset].sort((a, b) => a - b);
+  const ptr = hs.map(() => 0), cur = hs.map(() => undefined);
+  const series = Object.fromEntries(PARTIES.map(p => [p.key, []])), blocs = { bibi: [], opp: [], arab: [], other: [] }, tOut = [];
+  for (const t of times) {
+    hs.forEach((h, j) => { while (ptr[j] < h.length && Math.round(h[ptr[j]].t / step) * step <= t) { cur[j] = h[ptr[j]].p; ptr[j]++; } });
+    const acc = {};
+    jobs.forEach((j, i) => {
+      if (cur[i] === undefined) return;
+      const a = acc[j.key] || (acc[j.key] = { s: 0, w: 0, pass: null });
+      if (j.pass) a.pass = cur[i]; else { a.s += cur[i] * j.mid; a.w += cur[i]; }
+    });
+    const means = {}; let ok = true;
+    for (const p of PARTIES) {
+      const a = acc[p.key];
+      if (M[p.key].sb) { if (!a || !a.w) { ok = false; break; } means[p.key] = a.s / a.w; }
+      else means[p.key] = a && a.pass != null ? a.pass * 4.5 : 0;
+    }
+    if (!ok) continue;
+    const tot = Object.values(means).reduce((x, y) => x + y, 0);
+    tOut.push(t * 1000);
+    const bt = { bibi: 0, opp: 0, arab: 0, other: 0 };
+    for (const p of PARTIES) { const v = means[p.key] * 120 / tot; series[p.key].push(v); bt[p.bloc] += v; }
+    for (const b in bt) blocs[b].push(bt[b]);
+  }
+  S.trend = { times: tOut, series, blocs };
+  $("#trendLoading").hidden = tOut.length > 0;
+  if (!tOut.length) $("#trendLoading").textContent = "No overlapping history in this range.";
+  drawTrend();
+  ensureWS();
+}
+function renderTrendControls(){
+  $("#trendMode").innerHTML = [["blocs", "Blocs"], ["parties", "Parties"]].map(([k, l]) => `<button type="button" data-tm="${k}" aria-pressed="${k === S.trendMode}">${l}</button>`).join("");
+  $("#trendView").innerHTML = [["lines", "Lines"], ["bars", "Stacked bars"]].map(([k, l]) => `<button type="button" data-tv="${k}" aria-pressed="${k === S.trendView}">${l}</button>`).join("");
+  $("#trendRange").innerHTML = Object.entries(TREND_RANGES).map(([k, r]) => `<button type="button" data-tr="${k}" aria-pressed="${k === S.trendRange}">${r.label}</button>`).join("");
+}
+function drawTrend(){
+  if (!S.trend) return;
+  if (!S.trendChart) S.trendChart = makeChart($("#trendChart"), v => +v.toFixed(2) + "", { afterDataLimits: sc => {
+    if (sc.options.bounds !== "data") return;
+    const pad = Math.max((sc.max - sc.min) * 0.08, 0.3);
+    sc.min = Math.max(0, sc.min - pad); sc.max = Math.min(120, sc.max + pad);
+  } });
+  const T = S.trend, pts = arr => arr.map((y, i) => ({ x: T.times[i], y }));
+  const win = TREND_RANGES[S.trendRange].windowMs, stepped = win ? "before" : false, y = S.trendChart.options.scales.y;
+  let ds;
+  if (S.trendMode === "blocs") {
+    ds = ["opp", "bibi", "arab", "other"].map(b => ({ label: BLOCS[b].name, borderColor: css("--" + b), backgroundColor: css("--" + b), data: pts(T.blocs[b]), bloc: b, stepped }));
+    if (!win) {
+      const x0 = T.times[0], x1 = Math.max(Date.now(), T.times[T.times.length - 1]);
+      ds.push({ label: "Majority (61)", ref: true, borderColor: css("--muted"), borderDash: [5, 4], borderWidth: 1, data: [{ x: x0, y: 61 }, { x: x1, y: 61 }] });
+    }
+  } else {
+    ds = PARTIES.map(p => ({ label: p.name, borderColor: p.color, backgroundColor: p.color, data: pts(T.series[p.key]), party: p.key, stepped }));
+  }
+  // Short windows zoom the y-axis to the data so tenth-of-a-seat moves are visible, as in the odds chart.
+  if (win) { y.min = undefined; y.max = undefined; y.bounds = "data"; }
+  else { y.bounds = "ticks"; y.min = 0; y.max = S.trendMode === "blocs" ? 70 : undefined; }
+  S.trendChart.data.datasets = ds;
+  applyWindow(S.trendChart, win, Date.now());
+  S.trendChart.update();
+  const bars = S.trendView === "bars";
+  $("#trendChart").hidden = bars; $("#trendBars").hidden = !bars;
+  if (bars) drawBars(); else S.trendChart.resize();
+  renderTrendLegend();
+}
+/* Stacked bars: one bar per time window, showing the implied 120 seats at the close of that window. */
+const BAR_STEPS = [10e3, 15e3, 30e3, 60e3, 120e3, 300e3, 600e3, 900e3, 1800e3, 3600e3, 7200e3, 10800e3, 21600e3, 43200e3, 864e5, 1728e5, 6048e5, 12096e5, 2592e6];
+const STACK = { blocs: ["bibi", "other", "arab", "opp"], parties: ["likud", "shas", "utj", "otzma", "rzp", "amcha", "reservists", "raam", "joint", "yb", "dems", "together", "yashar"] };
+const line61 = { id: "line61", afterDatasetsDraw(c){
+  const y = c.scales.y.getPixelForValue(61), { left, right } = c.chartArea, ctx = c.ctx;
+  ctx.save(); ctx.strokeStyle = css("--ink"); ctx.globalAlpha = .7; ctx.setLineDash([5, 4]); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+  ctx.setLineDash([]); ctx.globalAlpha = 1; ctx.fillStyle = css("--ink"); ctx.font = "500 10px 'IBM Plex Mono', monospace"; ctx.textAlign = "right";
+  ctx.fillText("61", right - 4, y - 4); ctx.restore();
+} };
+function drawBars(){
+  const T = S.trend; if (!T || !T.times.length) return;
+  const now = Date.now(), win = TREND_RANGES[S.trendRange].windowMs;
+  const start = win ? now - win : T.times[0], span = now - start;
+  const B = BAR_STEPS.find(b => b >= span / 36) || BAR_STEPS[BAR_STEPS.length - 1];
+  const keys = STACK[S.trendMode], src = S.trendMode === "blocs" ? T.blocs : T.series;
+  const labels = [], titles = [], vals = keys.map(() => []);
+  let j = -1;
+  for (let a = Math.floor(start / B) * B; a < now; a += B) {
+    const e = Math.min(a + B, now);
+    while (j + 1 < T.times.length && T.times[j + 1] <= e) j++;
+    if (j < 0) continue;
+    labels.push(fmtTime(a, span));
+    titles.push(`${new Date(a).toLocaleString([], { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit", second: B < 60e3 ? "2-digit" : undefined })} → ${e === now ? "now" : fmtTime(e, span)}`);
+    keys.forEach((k, i) => vals[i].push(src[k][j]));
+  }
+  if (!S.barsChart) {
+    const t = chartTheme();
+    S.barsChart = new Chart($("#trendBars"), {
+      type: "bar", data: { labels: [], datasets: [] }, plugins: [line61],
+      options: {
+        animation: false, responsive: true, maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        datasets: { bar: { barPercentage: .88, categoryPercentage: .94, borderWidth: 0 } },
+        plugins: { legend: { display: false },
+          tooltip: { backgroundColor: t.surface, titleColor: t.ink, bodyColor: t.ink, footerColor: t.text, borderColor: t.grid, borderWidth: 1, padding: 10, boxPadding: 4, itemSort: (a, b) => b.datasetIndex - a.datasetIndex,
+            callbacks: { title: it => it.length ? S.barsTitles[it[0].dataIndex] : "", label: c => ` ${c.dataset.label}: ${c.parsed.y.toFixed(1)}`,
+              footer: it => S.trendMode === "blocs" ? "" : Object.entries(BLOCS).map(([b, B]) => `${B.short} ${it.filter(x => PBYKEY[x.dataset.key].bloc === b).reduce((s, x) => s + x.parsed.y, 0).toFixed(1)}`).join(" · ") } } },
+        scales: {
+          x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { color: t.text, maxRotation: 0, autoSkip: true, maxTicksLimit: 8, font: { family: "IBM Plex Mono", size: 10 } } },
+          y: { stacked: true, min: 0, max: 120, grid: { color: t.grid, drawTicks: false }, border: { display: false }, ticks: { color: t.text, stepSize: 20, padding: 6, font: { family: "IBM Plex Mono", size: 10 } } },
+        },
+      },
+    });
+  }
+  S.barsTitles = titles;
+  const c = S.barsChart, n = labels.length;
+  c.data.labels = labels;
+  c.data.datasets = keys.map((k, i) => {
+    const col = S.trendMode === "blocs" ? css("--" + k) : PBYKEY[k].color;
+    return { key: k, label: S.trendMode === "blocs" ? BLOCS[k].name : PBYKEY[k].name, data: vals[i], backgroundColor: vals[i].map((_, x) => x === n - 1 ? col : col + "d0") };
+  });
+  c.update("none");
+  S.barsAt = now;
+}
+function renderTrendLegend(){
+  const ds = (S.trendChart?.data.datasets || []).filter(d => !d.ref), now = Date.now();
+  // Seat velocity: change in expected seats over the last 1s and 1m, from the per-tick seat tape.
+  // Blank until the tape reaches back far enough, so a 1m figure appears a minute after load.
+  const tp = S.seatTape;
+  const sv = (d, w) => {
+    if (!tp.length || tp[0].t > now - w) return null;
+    const key = d.bloc ? "b:" + d.bloc : "p:" + d.party;
+    return tp[tp.length - 1].v[key] - tp[stepAt(tp, now - w, "t")].v[key];
+  };
+  const tag = (v, unit) => v == null ? "" : `<span class="vel-tag chg ${v > 0.005 ? "up" : v < -0.005 ? "down" : "muted"}" title="Seats gained over the last ${unit}">${v > 0.005 ? "▲" : v < -0.005 ? "▼" : "▬"} ${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(2)}/${unit}</span>`;
+  $("#trendLegend").innerHTML = ds.map(d => {
+    const a = d.data[0]?.y ?? 0, b = d.data[d.data.length - 1]?.y ?? 0, dd = b - a;
+    return `<span class="li"><i class="sw" style="background:${d.borderColor}"></i>${esc(d.label)} <b>${b.toFixed(1)}</b> <span class="chg ${dd > 0.05 ? "up" : dd < -0.05 ? "down" : "muted"}">${dd >= 0 ? "+" : "−"}${Math.abs(dd).toFixed(1)}</span> ${tag(sv(d, 1000), "1s")} ${tag(sv(d, 60000), "1m")}</span>`;
+  }).join("");
+}
+function tickTrend(now){
+  const T = S.trend;
+  if (!T || !T.times.length || !S.trendChart) return;
+  const m = expectedNow(), bt = { bibi: 0, opp: 0, arab: 0, other: 0 };
+  for (const p of PARTIES) bt[p.bloc] += m[p.key];
+  const v = {};
+  for (const p of PARTIES) v["p:" + p.key] = m[p.key];
+  for (const b in bt) v["b:" + b] = bt[b];
+  S.seatTape.push({ t: now, v });
+  while (S.seatTape.length > 2 && S.seatTape[1].t < now - 70000) S.seatTape.shift();
+  const win0 = TREND_RANGES[S.trendRange].windowMs;
+  const gap = (win0 || now - T.times[0]) / 6000, n = T.times.length;
+  const replace = n >= 2 && now - T.times[n - 2] < gap * 0.75;
+  const put = (arr, v) => { if (replace) arr[arr.length - 1] = v; else arr.push(v); };
+  put(T.times, now);
+  for (const p of PARTIES) put(T.series[p.key], m[p.key]);
+  for (const b in bt) put(T.blocs[b], bt[b]);
+  for (const d of S.trendChart.data.datasets) {
+    if (d.ref) { d.data[d.data.length - 1].x = now; continue; }
+    const y = d.bloc ? bt[d.bloc] : d.party ? m[d.party] : null;
+    if (y != null) pushPoint(d.data, now, y, gap);
+  }
+  const win = TREND_RANGES[S.trendRange].windowMs;
+  applyWindow(S.trendChart, win, now);
+  if (win) {
+    const cut = now - win * 1.05; let i = 0;
+    while (i < T.times.length - 1 && T.times[i + 1] < cut) i++;
+    if (i > 0) { T.times.splice(0, i); for (const k in T.series) T.series[k].splice(0, i); for (const b in T.blocs) T.blocs[b].splice(0, i); }
+  }
+  S.trendChart.update("none");
+  if (S.trendView === "bars" && now - S.barsAt >= 1000) drawBars();
+}
+
+/* ---------- arbitrage scanner ---------- */
+const BOOKS = {};
+let booksAt = 0, scanning = false;
+async function fetchBooks(){
+  const toks = [...new Set(Object.keys(S.ev).flatMap(slug => outs(slug).map(o => o.tokens[0])).filter(Boolean))];
+  const chunks = []; for (let i = 0; i < toks.length; i += 100) chunks.push(toks.slice(i, i + 100));
+  const res = await Promise.all(chunks.map(c => fetch(`${CLOB}/books`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c.map(t => ({ token_id: t }))) }).then(r => r.ok ? r.json() : [])));
+  for (const arr of res) for (const b of arr) {
+    BOOKS[b.asset_id] = {
+      bids: (b.bids || []).map(x => [+x.price, +x.size]).filter(x => x[1] > 0).sort((a, b) => b[0] - a[0]),
+      asks: (b.asks || []).map(x => [+x.price, +x.size]).filter(x => x[1] > 0).sort((a, b) => a[0] - b[0]),
+    };
+  }
+  booksAt = Date.now();
+  return toks.length;
+}
+// Buying YES walks the asks; buying NO is filled against YES bids at (1 − bid).
+const legYes = (o, name) => ({ name: name || o.label, side: "YES", o, mid: o.p, levels: BOOKS[o.tokens[0]]?.asks || [] });
+const legNo = (o, name) => ({ name: name || o.label, side: "NO", o, mid: 1 - o.p, levels: (BOOKS[o.tokens[0]]?.bids || []).map(([p, s]) => [1 - p, s]) });
+const feeAt = (leg, p) => leg.o.fee && leg.o.fee.rate ? leg.o.fee.rate * Math.pow(p * (1 - p), leg.o.fee.exponent || 1) : 0;
+function walk(legs, payout){
+  if (!legs.length || legs.some(l => !l.levels.length)) return null;
+  const idx = legs.map(() => 0), rem = legs.map(l => l.levels[0][1]);
+  const top = legs.reduce((s, l) => s + l.levels[0][0], 0), topFee = legs.reduce((s, l) => s + feeAt(l, l.levels[0][0]), 0);
+  let shares = 0, cost = 0, fees = 0;
+  for (let guard = 0; guard < 2000; guard++) {
+    const unit = legs.reduce((s, l, i) => s + l.levels[idx[i]][0], 0);
+    const uf = legs.reduce((s, l, i) => s + feeAt(l, l.levels[idx[i]][0]), 0);
+    if (unit + uf >= payout - 1e-9) break;
+    const q = Math.min(...rem);
+    shares += q; cost += q * unit; fees += q * uf;
+    let out = false;
+    legs.forEach((l, i) => { rem[i] -= q; if (rem[i] <= 1e-9) { idx[i]++; if (idx[i] >= l.levels.length) out = true; else rem[i] = l.levels[idx[i]][1]; } });
+    if (out) break;
+  }
+  return { top, topFee, shares, cost, fees, profit: shares * payout - cost - fees };
+}
+/* Brackets that tile the whole number line (e.g. "<20", "20-24", …, "35+") are exhaustive. */
+function isCover(list){
+  const isShare = list.some(o => o.label.includes("%"));
+  const b = buckets(list, isShare); if (!b || b.b.length !== list.length) return false;
+  const xs = b.b, first = xs[0], last = xs[xs.length - 1];
+  if (!(first.kind === "lt" || (first.kind === "rng" && first.a === 0)) || last.kind !== "ge") return false;
+  const end = x => x.kind === "lt" ? (isShare ? x.a : x.a - 1) : x.b;
+  for (let i = 1; i < xs.length; i++) {
+    const want = isShare ? end(xs[i - 1]) : end(xs[i - 1]) + 1;
+    if (Math.abs(xs[i].a - want) > 1e-9) return false;
+  }
+  return true;
+}
+function scanCandidates(){
+  const C = [], add = (title, logic, legs, payout, why, src) => C.push({ title, logic, legs, payout, why, src });
+  const placeholder = slug => (S.ev[slug]?.markets || []).some(m => !m.closed && /^(Party|Person) [A-Z0-9]+$/.test(m.groupItemTitle || ""));
+  // 1. Mutually exclusive events (neg-risk): buy every YES if exhaustive, or every NO.
+  for (const slug of Object.keys(S.ev)) {
+    const list = outs(slug).filter(o => BOOKS[o.tokens[0]]);
+    if (list.length < 2 || !list[0].negRisk) continue;
+    const title = S.ev[slug].title;
+    const cover = !placeholder(slug) && isCover(list);
+    add(`${title}: buy every YES`, cover ? "strict" : "open", list.map(o => legYes(o)), 1,
+      cover ? "The brackets cover every result and only one can win, so the set pays exactly $1." : "Unlisted outcomes could win, so the set isn't guaranteed to pay.", slug);
+    add(`${title}: buy every NO`, "strict", list.map(o => legNo(o)), list.length - 1,
+      `Only one outcome can win, so at least ${list.length - 1} of the ${list.length} NOs pay $1.`, slug);
+  }
+  // 2. A party finishes in one place only: NO on 1st/2nd/3rd/4th.
+  for (const p of PARTIES) {
+    const legs = [[EV.winner, "1st"], [EV.second, "2nd"], [EV.third, "3rd"], [EV.fourth, "4th"]]
+      .map(([s, pos]) => { const o = outs(s).find(x => partyByLabel(x.label) === p); return o && BOOKS[o.tokens[0]] ? legNo(o, `${p.name} ${pos}`) : null; }).filter(Boolean);
+    if (legs.length >= 2) add(`${p.name}: can't finish in two places`, "cross", legs, legs.length - 1, `A party has one finishing position, so at least ${legs.length - 1} NOs pay.`);
+  }
+  // 3. "Under 4 seats" and "wins a seat" are opposites (a list that passes the threshold gets at least 4).
+  for (const p of PARTIES) {
+    if (!p.pass || !p.seats) continue;
+    const lt4 = outs(p.seats).find(o => /^<\s*4$/.test(o.label)), pass = outs(EV.pass).find(o => o.label === p.pass);
+    if (!lt4 || !pass || !BOOKS[lt4.tokens[0]] || !BOOKS[pass.tokens[0]]) continue;
+    add(`${p.name}: under 4 seats vs wins a seat`, "cross", [legYes(lt4, `${p.name} <4 seats`), legYes(pass, `${p.name} wins a seat`)], 1, "One of the two always happens, so one YES pays $1.");
+    add(`${p.name}: under 4 seats vs wins a seat (NO side)`, "cross", [legNo(lt4, `${p.name} <4 seats`), legNo(pass, `${p.name} wins a seat`)], 1, "The two can't both happen, so one NO pays $1.");
+  }
+  // 4. Nested events: the narrower one can't be more likely than the wider one.
+  const nested = [];
+  const out = outs(EV.bibiOut).sort((a, b) => a.ord - b.ord);
+  for (let i = 0; i + 1 < out.length; i++) nested.push([out[i], out[i + 1], `Netanyahu out by ${out[i].label} ⊂ by ${out[i + 1].label}`, "strict"]);
+  const td = outs(EV.turnoutDir).sort((a, b) => b.ord - a.ord);
+  for (let i = 0; i + 1 < td.length; i++) nested.push([td[i], td[i + 1], `Turnout ${td[i].label} ⊂ ${td[i + 1].label}`, "strict"]);
+  const t74 = outs(EV.turnout).find(o => /74%\+/.test(o.label)), t75 = outs(EV.turnoutDir).find(o => /^75%\+/.test(o.label));
+  if (t74 && t75) nested.push([t75, t74, "Turnout 75%+ ⊂ turnout bracket 74%+", "cross"]);
+  const cp = one(EV.confidencePass), ch = one(EV.confidence);
+  if (cp && ch) nested.push([Object.assign({}, cp, { label: "confidence vote passes" }), Object.assign({}, ch, { label: "confidence vote held" }), "Confidence vote passes ⊂ vote is held", "cross"]);
+  const fb = formedBy();
+  for (let i = 0; i + 1 < fb.length; i++) nested.push([fb[i], fb[i + 1], `Government formed by ${fb[i].label} ⊂ by ${fb[i + 1].label}`, "strict"]);
+  const G = govOdds(), fLast = fb[fb.length - 1];
+  if (fLast) for (const [k, o] of Object.entries(G)) nested.push([Object.assign({}, o, { label: `${PBYKEY[k]?.name || o.label} in government` }), Object.assign({}, fLast, { label: `government formed by ${fLast.label}` }), `${PBYKEY[k]?.name || o.label} in government ⊂ a government forms`, "cross"]);
+  // PM markets can resolve on a caretaker PM, so these nest in spirit but not by the rules.
+  for (const [who, k] of [["Benjamin Netanyahu", "likud"], ["Gadi Eizenkot", "yashar"], ["Naftali Bennett", "together"]]) {
+    const a = outs(EV.pm).find(o => o.label === who);
+    if (a && G[k]) nested.push([Object.assign({}, a, { label: `${who} PM` }), Object.assign({}, G[k], { label: `${PBYKEY[k].name} in government` }), `${who} PM ⊂ ${PBYKEY[k].name} in government`, "rules"]);
+  }
+  for (const [sub, sup, title, logic] of nested) {
+    if (!BOOKS[sub.tokens[0]] || !BOOKS[sup.tokens[0]]) continue;
+    add(title, logic, [legYes(sup), legNo(sub)], 1, `“${sub.label}” can't happen without “${sup.label}”, so YES on the wider plus NO on the narrower always pays at least $1.`);
+  }
+  // 5. Sets of outcomes across markets that cover every result.
+  const lose = one(EV.likudLose), lk = outs("israel-election-likud-of-seats"), g = l => lk.find(o => o.label === l);
+  if (lose && g("30-34") && g("35+")) add("Likud under 32 vs Likud seat brackets", "cross", [legYes(lose, "Likud <32"), legYes(g("30-34")), legYes(g("35+"))], 1, "Under 32, 30–34 and 35+ together cover every Likud seat count.");
+  if (lose && ["<20", "20-24", "25-29", "30-34"].every(g)) add("Likud 32+ vs Likud seat brackets", "cross", [legNo(lose, "Likud <32"), ...["<20", "20-24", "25-29", "30-34"].map(l => legYes(g(l)))], 1, "32 or more, or one of the brackets up to 34, covers every Likud seat count.");
+  const bloc = one(EV.bloc), mg = outs(EV.margin);
+  const mBy = side => mg.filter(o => o.label.startsWith(side) || o.label === "Tie");
+  if (bloc && BOOKS[bloc.tokens[0]] && mg.length) {
+    add("Bigger bloc vs bloc margin (Netanyahu side)", "cross", [legYes(bloc, "Netanyahu bloc bigger"), ...mBy("Opposition").map(o => legYes(o))], 1, "Either the Netanyahu bloc is bigger, the blocs tie, or the opposition wins by some margin.");
+    add("Bigger bloc vs bloc margin (opposition side)", "cross", [legNo(bloc, "Opposition bloc bigger"), ...mBy("Bibi").map(o => legYes(o))], 1, "Either the opposition bloc is bigger, the blocs tie, or the Netanyahu bloc wins by some margin.");
+  }
+  return C.filter(c => c.legs.every(l => l.levels.length));
+}
+async function scanArb(){
+  if (scanning) return; scanning = true;
+  try {
+    const n = await fetchBooks();
+    const rows = scanCandidates().map(c => {
+      const w = walk(c.legs, c.payout);
+      const midCost = c.legs.reduce((s, l) => s + l.mid, 0);
+      const r = { ...c, w, midCost, midGap: c.payout - midCost, ret: w ? (c.payout - w.top - w.topFee) / (w.top + w.topFee) : null };
+      r.isArb = c.logic !== "open" && c.logic !== "rules" && w && w.profit > 0.005 && w.shares > 0;
+      return r;
+    });
+    const arbs = rows.filter(r => r.isArb).sort((a, b) => b.w.profit - a.w.profit);
+    const mis = rows.filter(r => !r.isArb && r.midGap > 0.0005).sort((a, b) => b.midGap / b.midCost - a.midGap / a.midCost);
+    renderArb([...arbs, ...mis.slice(0, Math.max(0, 16 - arbs.length))], rows, n);
+    S.err = errModel(); renderSeatTable(); renderHemicycle();
+  } catch (e) {
+    $("#arbStatus").textContent = `Couldn't load order books (${e.message})`;
+  } finally { scanning = false; }
+}
+function renderArb(list, all, n){
+  const feeMkts = Object.keys(S.ev).flatMap(s => outs(s)).filter(o => o.fee && o.fee.rate > 0).length;
+  const arbs = all.filter(r => r.isArb);
+  const best = arbs.reduce((m, r) => Math.max(m, r.ret), 0);
+  const $sum = arbs.reduce((s, r) => s + r.w.profit, 0);
+  $("#arbStatus").textContent = `${n} order books · ${all.length} logical checks · updated ${new Date(booksAt).toLocaleTimeString()}`;
+  $("#arbSum").innerHTML = `
+    <div><b>${arbs.length}</b><span>true arbitrage setups right now</span></div>
+    <div><b>${arbs.length ? pct(best, 1) : "—"}</b><span>best return at top of book</span></div>
+    <div><b>$${$sum.toFixed(2)}</b><span>locked-in profit across all of them, at current depth</span></div>
+    <div><b>${feeMkts ? feeMkts + " mkts" : "0%"}</b><span>${feeMkts ? "charge taker fees (included)" : "taker fees: Polymarket lists every market here as zero-fee"}</span></div>`;
+  const cents = v => `${v >= 0 ? "+" : "−"}${Math.abs(v * 100).toFixed(1)}¢`;
+  const verdict = r => r.isArb ? (r.logic === "strict" ? `<span class="verdict arb">True arbitrage</span>` : `<span class="verdict cross">True arbitrage · two markets</span>`)
+    : r.logic === "open" ? `<span class="verdict no">Not arbitrage: not exhaustive</span>` : r.logic === "rules" ? `<span class="verdict no">Not arbitrage: rules differ</span>` : `<span class="verdict no">Not arbitrage: spread too wide</span>`;
+  let h = `<thead><tr><th>Mispricing</th><th class="r">Gap at displayed prices</th><th class="r">Cost now</th><th class="r">Pays</th><th class="r">Return</th><th class="r">Size · profit</th><th>Verdict</th></tr></thead><tbody>`;
+  for (const r of list) {
+    const w = r.w;
+    const legTxt = r.legs.slice(0, 4).map(l => `${l.side} ${esc(l.name)} @${l.levels[0][0].toFixed(3)}`).join(" · ") + (r.legs.length > 4 ? ` · +${r.legs.length - 4} more legs` : "");
+    h += `<tr class="${r.isArb ? "has-explain" : ""}"><td style="min-width:240px"><div style="font-weight:500">${esc(r.title)}</div><div class="legs">${legTxt}</div></td>
+      <td class="r num">${cents(r.midGap)}</td>
+      <td class="r num">$${(w.top + w.topFee).toFixed(3)}</td>
+      <td class="r num">$${r.payout.toFixed(2)}</td>
+      <td class="r"><span class="ret ${r.ret > 0 ? "pos" : "neg"}">${r.ret >= 0 ? "+" : "−"}${Math.abs(r.ret * 100).toFixed(1)}%</span></td>
+      <td class="r num" style="white-space:nowrap">${r.isArb ? `${(+w.shares.toFixed(2)).toLocaleString()} ${w.shares === 1 ? "set" : "sets"}<div class="muted" style="font-size:.74rem">$${w.cost.toFixed(2)} in → $${w.profit.toFixed(2)} profit</div>` : "—"}</td>
+      <td>${verdict(r)}</td></tr>`;
+    if (r.isArb) h += `<tr class="explain"><td colspan="7">${esc(r.why)}${r.logic === "cross" ? " Relies on two markets resolving the same way." : ""}</td></tr>`;
+  }
+  $("#arbTable").innerHTML = h + `</tbody>`;
+}
+
+/* ---------- main loop ---------- */
+function renderAll(){
+  S.model = buildModel();
+  S.sim = simulate(S.model);
+  S.err = errModel();
+  renderMast(); renderPM(); renderTiles(); renderHemicycle(); renderCoalitions(); renderInGov(); renderSeatTable(); renderBlocs(); renderCheck(); renderRanks(); renderGov(); renderVote(); renderRaw();
+}
+async function poll(first){
+  try {
+    await fetchEvents();
+    renderAll();
+    S.lastOk = Date.now();
+    $("#errbox").hidden = true;
+    $("#dot").className = "dot live";
+    scanArb();
+    if (first) { await Promise.all([loadLive(), loadTrend()]); startTicks(); }
+    else { renderTabs(); ensureWS(); }
+  } catch (e) {
+    console.error(e);
+    $("#dot").className = "dot err";
+    $("#errbox").hidden = false;
+    $("#errbox").textContent = Object.keys(S.ev).length ? `Couldn't reach Polymarket (${e.message}). Showing the last data received; retrying every ${POLL_MS / 1000} seconds.` : `Couldn't reach Polymarket (${e.message}). Retrying every ${POLL_MS / 1000} seconds.`;
+    if (first && !Object.keys(S.ev).length) { S.nextAt = Date.now() + POLL_MS; setTimeout(() => poll(true), POLL_MS); return; }
+  }
+  S.nextAt = Date.now() + POLL_MS;
+  setTimeout(() => poll(false), POLL_MS);
+}
+setInterval(() => {
+  if (!S.lastOk) return;
+  const ago = Math.round((Date.now() - S.lastOk) / 1000), nxt = Math.max(0, Math.round((S.nextAt - Date.now()) / 1000));
+  $("#stat").textContent = `Live · updated ${ago}s ago · next in ${nxt}s`;
+}, 1000);
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("button[data-f]"); if (b) { S.featured = b.dataset.f; loadLive(); return; }
+  const r = e.target.closest("button[data-r]"); if (r) { S.range = r.dataset.r; loadLive(); return; }
+  const tk = e.target.closest("button[data-tick]"); if (tk) { S.tickMs = +tk.dataset.tick; renderTabs(); startTicks(); return; }
+  const vw = e.target.closest("button[data-vw]"); if (vw) { S.velW = +vw.dataset.vw; buildVel(); return; }
+  const pm = e.target.closest("button[data-pm]"); if (pm) { S.pmPick = pm.dataset.pm || null; renderPM(); return; }
+  const tm = e.target.closest("button[data-tm]"); if (tm) { S.trendMode = tm.dataset.tm; renderTrendControls(); drawTrend(); return; }
+  const tv = e.target.closest("button[data-tv]"); if (tv) { S.trendView = tv.dataset.tv; renderTrendControls(); drawTrend(); return; }
+  const tr = e.target.closest("button[data-tr]"); if (tr) { S.trendRange = tr.dataset.tr; loadTrend(); return; }
+  const row = e.target.closest("tr[data-party]");
+  if (row && PBYKEY[row.dataset.party].seats) { S.featured = "seats:" + row.dataset.party; loadLive(); $("#live").scrollIntoView({ behavior: "smooth", block: "start" }); }
+});
+document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.matches("tr[data-party]")) e.target.click(); });
+$("#rawSearch").addEventListener("input", renderRaw);
+$("#errUsd").addEventListener("change", e => { S.errUsd = +e.target.value; if (S.model) { S.err = errModel(); renderSeatTable(); renderHemicycle(); } });
+$("#priceMode").innerHTML = Object.entries(PRICE_MODES).map(([k, l]) => `<option value="${k}"${k === S.priceMode ? " selected" : ""}>${l}</option>`).join("");
+$("#priceMode").addEventListener("change", e => { S.priceMode = e.target.value; if (S.model) { loadLive(); renderPM(); } });
+let velDebounce = null;
+function readVelControls(){
+  const n = parseFloat($("#velN").value), u = +$("#velU").value;
+  if (!(n > 0)) return;
+  S.velW = Math.max(10, n * u); S.velPer = +$("#velPer").value;
+  buildVel();
+}
+$("#velN").addEventListener("input", () => { clearTimeout(velDebounce); velDebounce = setTimeout(readVelControls, 300); });
+$("#velU").addEventListener("change", readVelControls);
+$("#velPer").addEventListener("change", readVelControls);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  for (const k of ["liveChart", "trendChart", "velChart", "barsChart"]) { if (S[k]) { S[k].destroy(); S[k] = null; } }
+  if (S.model) { renderAll(); loadLive(); drawTrend(); }
+});
+
+/* Polls close at 22:00 Israel time on 27 Oct 2026. Israel is back on UTC+2 after 25 Oct, so that's 20:00 UTC. */
+const POLLS_CLOSE = Date.UTC(2026, 9, 27, 20, 0, 0);
+function tickPolls(){
+  const d = POLLS_CLOSE - Date.now(), a = Math.abs(d), h = Math.floor(a / 36e5), m = Math.floor(a / 6e4) % 60, sec = Math.floor(a / 1e3) % 60;
+  const t = (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sec).padStart(2, "0");
+  $("#polls").classList.toggle("closed", d <= 0);
+  $("#pollsLab").textContent = d > 0 ? "Polls close in" : "Polls closed";
+  $("#pollsClock").textContent = d > 0 ? t : t + " ago";
+}
+tickPolls(); setInterval(tickPolls, 1000);
+
+poll(true);
+</script>
+
+</body></html>
