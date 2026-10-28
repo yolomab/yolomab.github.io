@@ -176,6 +176,14 @@ main{display:grid;gap:22px;padding-block:22px 60px}
 .tabs button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
 .chartbox{position:relative;height:340px}
 @media (max-width:600px){.chartbox{height:260px}}
+/* Trade ticker: the latest fills on the charted markets, newest on top. */
+.trades{position:absolute;top:6px;left:62px;width:240px;height:110px;pointer-events:none;z-index:2}
+.tchip{position:absolute;top:0;left:0;display:flex;align-items:baseline;gap:6px;white-space:nowrap;padding:2px 8px;border-radius:6px;background:color-mix(in srgb,var(--surface) 95%,transparent);border:1px solid color-mix(in srgb,var(--c) 45%,transparent);font:500 .74rem var(--f-mono);font-variant-numeric:tabular-nums;transition:transform .28s cubic-bezier(.2,.8,.2,1),opacity .28s;will-change:transform,opacity}
+.tchip b{color:var(--c);font-weight:600}
+.tchip span{color:var(--muted);font-size:.66rem;max-width:170px;overflow:hidden;text-overflow:ellipsis}
+.tchip.big{border-color:var(--c);box-shadow:0 0 0 1px var(--c)}
+@media (max-width:600px){.trades{left:44px}}
+@media (prefers-reduced-motion:reduce){.tchip{transition:none}}
 .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:12px;font-size:.84rem}
 .legend .li{display:flex;align-items:center;gap:6px}
 .legend .li b{font-family:var(--f-mono);font-weight:500}
@@ -335,7 +343,7 @@ details.ev summary .m{font:400 .76rem var(--f-mono);color:var(--muted)}
         <div class="seg" id="tickSeg"></div><div class="seg" id="rangeSeg"></div></div>
     </div>
     <div class="tabs" id="tabs"></div>
-    <div class="chartbox"><canvas id="liveChart"></canvas><div class="loading" id="liveLoading">Loading history…</div></div>
+    <div class="chartbox"><canvas id="liveChart"></canvas><div class="trades" id="trades" aria-hidden="true"></div><div class="loading" id="liveLoading">Loading history…</div></div>
     <div class="legend" id="liveLegend"></div>
     <div class="vel-head">
       <div><div class="eyebrow">Velocity · derivative of the odds above</div><span class="muted" style="font-size:.82rem">Change in the chosen price over a trailing window, read from the live order-book tape. Units: <b class="mono" id="velUnitLabel"></b></span></div>
@@ -1309,6 +1317,7 @@ async function loadLive(){
   const hist = await Promise.all(series.map(s => fetchHist(s.token, r.interval, r.fidelity)));
   if (seq !== S.loadSeq) return;
   S.liveSeries = series;
+  clearTrades();
   if (!S.liveChart) S.liveChart = makeChart($("#liveChart"), v => +v.toFixed(3) + "%",
     { min: 0, suggestedMax: 100, afterDataLimits: sc => {
       if (sc.options.bounds !== "data") return;
@@ -1541,10 +1550,50 @@ function wsHandle(m){
       tapePush(c.asset_id, now);
     }
   } else if (m.event_type === "last_trade_price") {
-    const b = bookOf(m.asset_id);
-    b.last = fixLast(m.asset_id, b, +m.price);
+    const b = bookOf(m.asset_id), raw = +m.price;
+    b.last = fixLast(m.asset_id, b, raw);
+    tradeIn(m, b.last !== raw);
     tapePush(m.asset_id, now);
   }
+}
+
+/* ---------- trade ticker: every fill on the charted markets, four on screen at a time ---------- */
+// Each websocket trade carries its price, size in shares, taker side and transaction hash, so these are exact
+// fills, not inferred from volume. Bursts queue up and play out quickly, so the column slides instead of jumping.
+const TRADES = { q: [], chips: [], timer: null, show: 4, h: 25 };
+function tradeIn(m, flipped){
+  const d = S.liveChart?.data.datasets.find(x => x.token === m.asset_id);
+  const raw = +m.price, size = +m.size;
+  if (!d || !(raw > 0) || !(size > 0)) return;
+  // A fill reported at the other outcome's price is the opposite trade on this one: buying No is selling Yes.
+  // Candidates go by surname so the chip stays short; parties and brackets keep their full label.
+  const label = CANDIDATES[d.label] ? d.label.split(" ").pop() : d.label;
+  TRADES.q.push({ usd: raw * size, up: (m.side === "BUY") !== flipped, yes: flipped ? 1 - raw : raw, label, color: d.borderColor });
+  if (TRADES.q.length > 12) TRADES.q.splice(0, TRADES.q.length - 12);
+  if (!TRADES.timer) tradeStep();
+}
+function tradeStep(){
+  const t = TRADES.q.shift();
+  if (!t) { TRADES.timer = null; return; }
+  const el = document.createElement("div");
+  el.className = "tchip" + (t.usd >= 1000 ? " big" : "");
+  el.style.setProperty("--c", t.color);
+  el.innerHTML = `<b>${t.up ? "+" : "−"}${usd(t.usd)}</b><span>${+(t.yes * 100).toFixed(1)}¢ ${esc(t.label)}</span>`;
+  el.style.transform = `translateY(${-TRADES.h}px)`; el.style.opacity = "0";
+  $("#trades").prepend(el);
+  TRADES.chips.unshift(el);
+  el.getBoundingClientRect(); // commit the start position so the slide-in animates
+  TRADES.chips.forEach((c, i) => {
+    c.style.transform = `translateY(${i * TRADES.h}px)`;
+    c.style.opacity = i < TRADES.show ? String(1 - i * 0.17) : "0";
+  });
+  for (const c of TRADES.chips.splice(TRADES.show)) setTimeout(() => c.remove(), 320);
+  // The bigger the backlog, the faster the column scrolls.
+  TRADES.timer = setTimeout(tradeStep, Math.max(70, 260 - 45 * TRADES.q.length));
+}
+function clearTrades(){
+  clearTimeout(TRADES.timer); TRADES.timer = null; TRADES.q.length = 0; TRADES.chips.length = 0;
+  $("#trades").innerHTML = "";
 }
 setInterval(() => { WS.rate = WS.msgs / 2; WS.msgs = 0; if (S.lastOk) renderLiveSub(); }, 2000);
 
