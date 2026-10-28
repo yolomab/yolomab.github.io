@@ -196,6 +196,7 @@ tr.click:hover td{background:var(--sunk)}
 .pill.arab{background:color-mix(in srgb,var(--arab) 18%,transparent);color:var(--arab)}
 .pill.other{background:color-mix(in srgb,var(--other) 22%,transparent);color:var(--muted)}
 .seatnum{font:700 1.15rem var(--f-display)}
+.sx{font:400 .62em var(--f-mono);color:var(--muted);margin-left:.35em;letter-spacing:0;font-variant-numeric:tabular-nums;opacity:.85}
 .whisk{position:relative;height:22px;min-width:220px}
 .whisk .axis{position:absolute;left:0;right:0;top:50%;height:1px;background:var(--line)}
 .whisk .rng{position:absolute;top:calc(50% - 3px);height:6px;border-radius:3px;opacity:.35}
@@ -352,7 +353,7 @@ details.ev summary .m{font:400 .76rem var(--f-mono);color:var(--muted)}
   <section class="panel" id="trend">
     <div class="phead">
       <div><div class="eyebrow">Implied seats over time · all seat-bracket markets</div><h2>Implied seats</h2>
-      <p id="trendSub">Expected seats rebuilt from the history of every seat-bracket market, normalised to 120. New points stream from the order book at the tick rate set above.</p></div>
+      <p id="trendSub">Expected seats rebuilt from the history of every seat-bracket market, normalised to 120. New points stream from the order-book midpoint at the tick rate set above, so seats stay steady while the odds chart keeps its microprice swings.</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><div class="seg" id="trendView"></div><div class="seg" id="trendMode"></div><div class="seg" id="trendRange"></div></div>
     </div>
     <div class="chartbox"><canvas id="trendChart"></canvas><canvas id="trendBars" hidden></canvas><div class="loading" id="trendLoading">Fetching 60+ bracket histories…</div></div>
@@ -524,11 +525,14 @@ async function fetchEvents(){
   for (let i = 0; i < ALL_SLUGS.length; i += 15) chunks.push(ALL_SLUGS.slice(i, i + 15));
   const res = await Promise.all(chunks.map(c => getJSON(`${GAMMA}/events?limit=50&${c.map(s => "slug=" + encodeURIComponent(s)).join("&")}`)));
   for (const arr of res) for (const e of arr) S.ev[e.slug] = e;
-  S.tok = {};
+  S.tok = {}; S.lastTok = {};
   for (const e of Object.values(S.ev)) for (const m of e.markets || []) {
     if (!m.outcomePrices || !m.clobTokenIds) continue;
     const pr = JSON.parse(m.outcomePrices).map(Number), tk = JSON.parse(m.clobTokenIds);
     tk.forEach((t, i) => S.tok[t] = pr[i]);
+    // Gamma's last trade is always the Yes side's, so it settles which way a websocket trade price reads.
+    const lt = parseFloat(m.lastTradePrice);
+    if (isFinite(lt) && tk.length === 2) { S.lastTok[tk[0]] = lt; S.lastTok[tk[1]] = 1 - lt; }
   }
 }
 
@@ -664,6 +668,8 @@ function simulate(M){
   Object.keys(marg).forEach(k => marg[k] /= NSIM);
   Object.assign(out, { pBibi61: b61 / NSIM, pOpp61: o61 / NSIM, pAny61: (b61 + o61) / NSIM, pBibiMore: bMore / NSIM, pTie: tie / NSIM, pOppMore: 1 - (bMore + tie) / NSIM, marg });
   out.rawMean = rawSum.reduce((s, x) => s + x, 0) / NSIM;
+  const whole = allocate(PARTIES.map(p => out.parties[p.key].mean));
+  out.whole = Object.fromEntries(PARTIES.map((p, k) => [p.key, whole[k]]));
   return out;
 }
 
@@ -675,6 +681,11 @@ function allocate(means){
   xs.map((x, i) => [x - fl[i], i]).sort((a, b) => b[0] - a[0]).slice(0, left).forEach(([, i]) => fl[i]++);
   return fl;
 }
+/* Seat counts read as whole seats, with the exact expectation in small grey type beside them. */
+const sx = v => `<span class="sx">${v.toFixed(3)}</span>`;
+const seatHTML = (exact, whole = Math.round(exact)) => `${whole}${sx(exact)}`;
+const wholeOf = keys => keys.reduce((s, k) => s + S.sim.whole[k], 0);
+const blocKeys = b => PARTIES.filter(p => p.bloc === b).map(p => p.key);
 
 /* ---------- rendering ---------- */
 function tile(eyebrow, list, sub){
@@ -775,11 +786,11 @@ function renderPM(){
   const facts = [];
   if (party) {
     const r = S.sim.parties[party.key];
-    facts.push(`<div><b>${r.mean.toFixed(1)}</b><span>${esc(party.name)} implied seats (80%: ${r.p10}–${r.p90})</span></div>`);
+    facts.push(`<div><b>${seatHTML(r.mean, S.sim.whole[party.key])}</b><span>${esc(party.name)} implied seats (80%: ${r.p10}–${r.p90})</span></div>`);
     facts.push(`<div><b>${pct(r.rank[0])}</b><span>${esc(party.name)} wins most seats (model)</span></div>`);
     if (party.bloc === "bibi" || party.bloc === "opp") {
       const arr = S.sim.blocs[party.bloc], m = arr.reduce((s, x) => s + x, 0) / NSIM;
-      facts.push(`<div><b>${m.toFixed(1)}</b><span>${party.bloc === "bibi" ? "Netanyahu" : "Opposition"} bloc seats · ${pct(party.bloc === "bibi" ? S.sim.pBibi61 : S.sim.pOpp61)} reach 61</span></div>`);
+      facts.push(`<div><b>${seatHTML(m, wholeOf(blocKeys(party.bloc)))}</b><span>${party.bloc === "bibi" ? "Netanyahu" : "Opposition"} bloc seats · ${pct(party.bloc === "bibi" ? S.sim.pBibi61 : S.sim.pOpp61)} reach 61</span></div>`);
     }
   }
   if (mandate) facts.push(`<div><b>${pct(mandate.p)}</b><span>Gets the first mandate from the President</span></div>`);
@@ -847,7 +858,7 @@ function renderHemicycle(){
   svg += `<text x="0" y="-0.04" text-anchor="middle" font-family="Rubik, sans-serif" font-size="0.048" fill="var(--muted)">${need ? `${BLOCS[lead].short} ${need} short of 61` : `${BLOCS[lead].short} has a majority`}</text>`;
   $("#hemi").innerHTML = svg;
   $("#blocbar").innerHTML = ["opp", "arab", "other", "bibi"].map(b => `<span style="width:${bt[b] / 1.2}%;background:var(--${b})" title="${BLOCS[b].name}: ${bt[b]}"></span>`).join("") + `<i class="mid" title="60 seats"></i>`;
-  $("#bloclegend").innerHTML = ["opp", "arab", "other", "bibi"].map(b => `<span><i class="sw" style="background:var(--${b})"></i>${BLOCS[b].short} <b>${bt[b]}</b> <span class="muted num">(${bm[b].toFixed(1)}${S.err ? ` <span title="Price error at $${S.err.usd.toLocaleString()} trades, 80% range">${errTxt(S.err.blocs[b])}</span>` : ""})</span></span>`).join("");
+  $("#bloclegend").innerHTML = ["opp", "arab", "other", "bibi"].map(b => `<span><i class="sw" style="background:var(--${b})"></i>${BLOCS[b].short} <b>${bt[b]}</b>${sx(bm[b])}${S.err ? ` <span class="muted num" title="Price error at $${S.err.usd.toLocaleString()} trades, 80% range">(${errTxt(S.err.blocs[b])})</span>` : ""}</span>`).join("");
   $("#partykey").innerHTML = PARTIES.map((p, k) => seats[k] ? `<span><i class="sw" style="background:${p.color}"></i>${esc(p.name)} ${seats[k]}</span>` : "").join("");
 }
 
@@ -879,7 +890,7 @@ function coalBar(core, ext){
   const seg = (k, cls) => { const m = S.sim.parties[k].mean; return `<span class="${cls}" style="width:${(m / 1.2).toFixed(2)}%;background:${PBYKEY[k].color}" title="${esc(PBYKEY[k].name)} ${m.toFixed(1)}"></span>`; };
   return `<div class="coal-bar">${core.map(k => seg(k, "")).join("")}${(ext || []).map(k => seg(k, "ext")).join("")}<i class="m61" title="61 seats"></i></div>`;
 }
-const chip = (k, ext) => `<span class="chip${ext ? " ext" : ""}"><i class="sw" style="background:${PBYKEY[k].color};margin:0"></i>${esc(PBYKEY[k].name)} ${S.sim.parties[k].mean.toFixed(1)}${ext ? " · outside" : ""}</span>`;
+const chip = (k, ext) => `<span class="chip${ext ? " ext" : ""}"><i class="sw" style="background:${PBYKEY[k].color};margin:0"></i>${esc(PBYKEY[k].name)} ${seatHTML(S.sim.parties[k].mean, S.sim.whole[k])}${ext ? " · outside" : ""}</span>`;
 /* "Which parties will be in the next government": one market per party. */
 const govParty = label => /reservist|new economic/i.test(label) ? PBYKEY.reservists : partyByLabel(label);
 function govOdds(){
@@ -903,14 +914,14 @@ function renderInGov(){
     return `<div class="ig-row" title="${esc(name)}: ${pct(o.p, 1)} (bid ${(lo * 100).toFixed(1)} / ask ${(hi * 100).toFixed(1)}) · ${usd(o.vol)} traded · ${usd(o.liq)} liquidity">
       <span class="ig-name"><i class="sw" style="background:${color}"></i>${esc(name)}</span>
       <div class="ig-track"><i class="ig-band" style="left:${(lo * 100).toFixed(1)}%;width:${Math.max(0.6, (hi - lo) * 100).toFixed(1)}%;background:${color}"></i><i class="ig-fill" style="width:${(o.p * 100).toFixed(1)}%;background:${color}"></i>${c != null ? `<i class="ig-cond" style="left:${(c * 100).toFixed(1)}%"></i>` : ""}</div>
-      <span class="r num">${pct(o.p)}</span><span class="r num muted">${c != null ? pct(c) : "—"}</span><span class="r num muted">${seats != null ? seats.toFixed(1) : "—"}</span></div>`;
+      <span class="r num">${pct(o.p)}</span><span class="r num muted">${c != null ? pct(c) : "—"}</span><span class="r num muted">${seats != null ? seatHTML(...seats) : "—"}</span></div>`;
   };
   const head = `<div class="ig-colh"><span>Party</span><span>Price · spread band · if a government forms</span><span class="r">Price</span><span class="r">If forms</span><span class="r">Seats</span></div>`;
   let h = head;
   for (const b of ["opp", "arab", "other", "bibi"]) {
     const ps = PARTIES.filter(p => p.bloc === b && G[p.key]).sort((x, y) => G[y.key].p - G[x.key].p);
     if (!ps.length) continue;
-    h += `<div style="--bc:var(--${b})"><div class="ig-gh"><span class="eyebrow">${esc(BLOCS[b].name)}</span></div>${ps.map(p => row(p.name, p.color, G[p.key], R[p.key].mean)).join("")}</div>`;
+    h += `<div style="--bc:var(--${b})"><div class="ig-gh"><span class="eyebrow">${esc(BLOCS[b].name)}</span></div>${ps.map(p => row(p.name, p.color, G[p.key], [R[p.key].mean, S.sim.whole[p.key]])).join("")}</div>`;
   }
   const extra = Object.keys(G).filter(k => !PBYKEY[k]).map(k => G[k]).sort((a, b) => b.p - a.p);
   if (extra.length) h += `<div style="--bc:var(--muted)"><div class="ig-gh"><span class="eyebrow">Not in the seat markets</span></div>${extra.map(o => row(o.label, css("--other"), o, null)).join("")}</div>`;
@@ -924,7 +935,7 @@ function renderInGov(){
   if (fb.length) stats.push(`<div class="ig-stat"><span class="lab">New government sworn in by 30 June 2027</span><b>${pct(pF)}</b><span class="sub">${fb.slice(0, -1).map(o => `by ${esc(o.label.replace(/, \d{4}$/, ""))} ${pct(o.p)}`).join(" · ")}</span></div>`);
   if (ra != null && jl != null) stats.push(`<div class="ig-stat"><span class="lab">An Arab party holds a ministry</span><b>${pct(Math.max(ra, jl))}–${pct(Math.min(1, ra + jl))}</b><span class="sub">Ra'am ${pct(ra, 1)} · Joint List ${pct(jl, 1)}. The range runs from both always together to never together.</span></div>`);
   if (ra != null && eiz != null) stats.push(`<div class="ig-stat"><span class="lab">Ra'am in an Eizenkot-led government</span><b>≤ ${pct(Math.min(ra, eiz))}</b><span class="sub">Ra'am won't sit with Otzma or RZP, so nearly all of its ${pct(ra)} is an anti-Netanyahu government, about ${pct(Math.min(1, ra / eiz))} of Eizenkot's ${pct(eiz)} PM odds. Outside support isn't priced anywhere.</span></div>`);
-  if (expOk) stats.push(`<div class="ig-stat"><span class="lab">Expected seats inside the government, if one forms</span><b>${expSeats.toFixed(1)}</b><span class="sub">Each party's in-government odds once a government forms, times its implied seats. ${expSeats < 61 ? "Below 61 means the market expects outside support, or is pricing too little in total." : "61 is a majority."}</span></div>`);
+  if (expOk) stats.push(`<div class="ig-stat"><span class="lab">Expected seats inside the government, if one forms</span><b>${seatHTML(expSeats)}</b><span class="sub">Each party's in-government odds once a government forms, times its implied seats. ${expSeats < 61 ? "Below 61 means the market expects outside support, or is pricing too little in total." : "61 is a majority."}</span></div>`);
   if (g("likud") != null && bibi != null) stats.push(`<div class="ig-stat"><span class="lab">Netanyahu-led government</span><b>${pct(g("likud"))}</b><span class="sub">Likud in government. Netanyahu for PM ${pct(bibi)} · Shas ${pct(g("shas"))} · UTJ ${pct(g("utj"))}. The Haredi parties track Netanyahu, so the market doesn't expect them to switch sides.</span></div>`);
   $("#govStats").innerHTML = stats.join("");
 }
@@ -935,7 +946,7 @@ function renderCoalitions(){
     <div class="coal-top"><span class="coal-name">${esc(c.name)}</span><span class="coal-p">${pct(c.p)}<small>reach 61</small></span></div>
     <div class="chips">${c.core.map(k => chip(k)).join("")}</div>
     ${coalBar(c.core)}
-    <div class="coal-meta"><span>Mean <b>${c.mean.toFixed(1)}</b> seats</span><span>80% range <b>${c.lo}–${c.hi}</b></span><span>${c.mean >= 61 ? "Above" : "Short of"} 61 by <b>${Math.abs(c.mean - 61).toFixed(1)}</b></span>${ceilTag(c.core)}</div>
+    <div class="coal-meta"><span>Mean <b>${seatHTML(c.mean, wholeOf(c.core))}</b> seats</span><span>80% range <b>${c.lo}–${c.hi}</b></span><span>${c.mean >= 61 ? "Above" : "Short of"} 61 by <b>${Math.abs(c.mean - 61).toFixed(1)}</b></span>${ceilTag(c.core)}</div>
     <div class="coal-note">${esc(c.note)}</div></div>`).join("");
   const min = MINORITY.map(c => {
     const a = coalStats(c.core), b = coalStats(c.ext); let need = 0, ok = 0;
@@ -946,7 +957,7 @@ function renderCoalitions(){
     <div class="coal-top"><span class="coal-name">${esc(c.name)}</span><span class="coal-p">${pct(c.pOk)}<small>reach 61 with support</small></span></div>
     <div class="chips">${c.core.map(k => chip(k)).join("")}${c.ext.map(k => chip(k, true)).join("")}</div>
     ${coalBar(c.core, c.ext)}
-    <div class="coal-meta"><span>Government <b>${c.mean.toFixed(1)}</b> + outside <b>${c.extMean.toFixed(1)}</b></span><span>Needs the outside support in <b>${pct(c.pNeed)}</b> of runs</span>${ceilTag(c.core)}</div>
+    <div class="coal-meta"><span>Government <b>${seatHTML(c.mean, wholeOf(c.core))}</b> + outside <b>${seatHTML(c.extMean, wholeOf(c.ext))}</b></span><span>Needs the outside support in <b>${pct(c.pNeed)}</b> of runs</span>${ceilTag(c.core)}</div>
     <div class="coal-note">${esc(c.note)}</div></div>`).join("");
   $("#coalSrc").innerHTML = `Party conditions from <a href="${SRC.wiki[1]}" target="_blank" rel="noopener">${SRC.wiki[0]}</a> and the <a href="${SRC.guide[1]}" target="_blank" rel="noopener">${SRC.guide[0]}</a>. Faded bar segments are outside supporters; the black line marks 61.`;
 }
@@ -1024,7 +1035,7 @@ function renderSeatTable(){
     h += `<tr class="click" data-party="${p.key}" tabindex="0">
       <td><div class="pname"><i class="sw" style="background:${p.color}"></i>${esc(p.name)}</div></td>
       <td><span class="pill ${p.bloc}">${p.bloc === "bibi" ? "Netanyahu" : p.bloc === "opp" ? "Opposition" : p.bloc === "arab" ? "Arab" : "Unaligned"}</span></td>
-      <td class="r"><span class="seatnum">${r.mean.toFixed(1)}</span></td>
+      <td class="r" style="white-space:nowrap"><span class="seatnum">${seatHTML(r.mean, S.sim.whole[p.key])}</span></td>
       <td><div class="whisk"><i class="axis"></i><i class="thr" style="left:${X(4)}" title="Threshold ≈ 4 seats"></i>
         <i class="rng" style="left:${X(r.p10)};width:calc(${X(r.p90)} - ${X(r.p10)});background:${p.color}"></i>
         ${E ? `<i class="err" style="left:${X(r.mean + E.lo)};width:calc(${X(r.mean + E.hi)} - ${X(r.mean + E.lo)})"></i>` : ""}
@@ -1033,8 +1044,8 @@ function renderSeatTable(){
       <td class="r num errcell"><span class="${E && E.hi - E.lo >= 2 ? "thin" : ""}">${errTxt(E)}</span></td>
       <td class="r num muted">${E ? usd(E.depth) : "—"}</td>
       <td>${spark(m.sb, p.color) || `<span class="muted" style="font-size:.75rem">no seat market</span>`}</td>
-      <td class="r num">${raw != null ? raw.toFixed(1) : "—"}${m.sb ? `<div class="muted" style="font-size:.7rem">Σ ${pct(m.sb.sum)}</div>` : ""}</td>
-      <td class="r num">${m.shareSeats != null ? m.shareSeats.toFixed(1) : "—"}</td>
+      <td class="r num" style="white-space:nowrap">${raw != null ? seatHTML(raw) : "—"}${m.sb ? `<div class="muted" style="font-size:.7rem">Σ ${pct(m.sb.sum)}</div>` : ""}</td>
+      <td class="r num" style="white-space:nowrap">${m.shareSeats != null ? seatHTML(m.shareSeats) : "—"}</td>
       <td class="r num">${m.shareMean != null ? m.shareMean.toFixed(1) + "%" : "—"}</td>
       <td class="r num">${passTxt}</td>
       <td class="r">${m.sb ? `<span class="chg ${m.sb.d1 > 0.05 ? "up" : m.sb.d1 < -0.05 ? "down" : "muted"}">${m.sb.d1 >= 0 ? "+" : "−"}${Math.abs(m.sb.d1).toFixed(1)}</span>` : ""}</td></tr>`;
@@ -1058,7 +1069,7 @@ function histSVG(arr, color, label, threshold){
   [30, 40, 50, 60, 70, 80].forEach(t => s += `<text x="${((t - lo) * bw + bw / 2).toFixed(1)}" y="${H + 13}" font-size="10" text-anchor="middle" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${t}</text>`);
   s += `</svg>`;
   const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
-  return `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px"><span style="font-weight:500"><i class="sw" style="background:${color}"></i>${esc(label)}</span><span class="num muted" style="font-size:.8rem">mean ${mean.toFixed(1)}</span></div>${s}`;
+  return `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px"><span style="font-weight:500"><i class="sw" style="background:${color}"></i>${esc(label)}</span><span class="num muted" style="font-size:.8rem">mean <b>${seatHTML(mean)}</b></span></div>${s}`;
 }
 
 function cmpRow(title, model, market, note){
@@ -1080,7 +1091,7 @@ function renderBlocs(){
     <div><b>${pct(sim.pBibi61)}</b><span>Netanyahu bloc reaches 61</span></div>
     <div><b>${pct(sim.pOpp61)}</b><span>Opposition bloc reaches 61</span></div>
     <div><b>${pct(sim.pOppMore)}</b><span>Opposition bloc is bigger</span></div>
-    <div><b>${arabMean.toFixed(1)}</b><span>Arab party seats (kingmaker pool)</span></div>`;
+    <div><b>${seatHTML(arabMean, wholeOf(blocKeys("arab")))}</b><span>Arab party seats (kingmaker pool)</span></div>`;
   const mk = outs(EV.margin);
   const order = ["Bibi 7+ seats", "Bibi 5-6 seats", "Bibi 3-4 seats", "Bibi 1-2 seats", "Tie", "Opposition 1-2 seats", "Opposition 3-4 seats", "Opposition 5-6 seats", "Opposition 7+ seats"];
   const msum = mk.reduce((s, o) => s + o.p, 0) || 1;
@@ -1225,7 +1236,7 @@ function chartTheme(){
   return { grid: css("--line"), text: css("--muted"), ink: css("--ink"), surface: css("--surface") };
 }
 const fmtTime = (ms, span) => { const d = new Date(ms); return span <= 30 * 60e3 ? d.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" }) : span < 2 * 864e5 ? d.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }) : d.toLocaleDateString([], { month:"short", day:"numeric" }); };
-function makeChart(canvas, yFmt, yOpts = {}){
+function makeChart(canvas, yFmt, yOpts = {}, tipFmt = yFmt){
   const t = chartTheme();
   return new Chart(canvas, {
     type: "line",
@@ -1236,7 +1247,7 @@ function makeChart(canvas, yFmt, yOpts = {}){
       plugins: {
         legend: { display: false },
         tooltip: { backgroundColor: t.surface, titleColor: t.ink, bodyColor: t.ink, borderColor: t.grid, borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true,
-          callbacks: { title: items => items.length ? new Date(items[0].parsed.x).toLocaleString([], { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit", second:"2-digit" }) : "", label: c => ` ${c.dataset.label}: ${yFmt(c.parsed.y)}` } },
+          callbacks: { title: items => items.length ? new Date(items[0].parsed.x).toLocaleString([], { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit", second:"2-digit" }) : "", label: c => ` ${c.dataset.label}: ${tipFmt(c.parsed.y)}` } },
       },
       scales: {
         x: { type: "linear", grid: { color: t.grid, drawTicks: false }, border: { display: false },
@@ -1449,13 +1460,26 @@ function bookTop(b){
 }
 function modePrice(b, mode){
   if (!b) return null;
-  const two = b.bid != null && b.ask != null;
-  if (mode === "last") return b.last;
-  if (mode === "mid") return two ? (b.bid + b.ask) / 2 : b.last;
+  const any = b.bid != null || b.ask != null, two = b.bid != null && b.ask != null;
+  // A missing side counts as 0 or 1, as in Gamma's prices: a 0.1¢ ask with no bids is a 0.05¢ midpoint.
+  const bid = b.bid ?? 0, ask = b.ask ?? 1, mid = any ? (bid + ask) / 2 : null;
+  if (mode === "last") return b.last ?? mid;
+  if (mode === "mid") return mid ?? b.last;
   // Microprice leans toward the side with less resting size: a heavy bid pushes the fair price up toward the ask.
-  if (mode === "micro") return two && b.bidSz + b.askSz > 0 ? (b.bid * b.askSz + b.ask * b.bidSz) / (b.bidSz + b.askSz) : b.last;
+  if (mode === "micro") return two && b.bidSz + b.askSz > 0 ? (b.bid * b.askSz + b.ask * b.bidSz) / (b.bidSz + b.askSz) : mid ?? b.last;
   // Polymarket's own rule: midpoint while the spread is 10¢ or tighter, otherwise the last trade.
-  return two && b.ask - b.bid <= 0.1 + 1e-9 ? (b.bid + b.ask) / 2 : b.last;
+  return any && ask - bid <= 0.1 + 1e-9 ? mid : b.last ?? mid;
+}
+// The market websocket sometimes reports a trade at the other outcome's price (1 − p), on book snapshots and
+// trade events alike. Keep whichever of p and 1 − p fits inside the book; when both or neither do, the one
+// nearer Gamma's last trade.
+function fixLast(token, b, price){
+  if (!isFinite(price)) return b.last;
+  const lo = (b.bid ?? 0) - 0.02, hi = (b.ask ?? 1) + 0.02, fits = v => v >= lo && v <= hi;
+  const a = fits(price), f = fits(1 - price);
+  if (a !== f) return a ? price : 1 - price;
+  const g = S.lastTok?.[token];
+  return g != null && Math.abs(1 - price - g) < Math.abs(price - g) ? 1 - price : price;
 }
 function livePrice(token, mode = S.priceMode){ return modePrice(WS.book[token], mode) ?? S.tok[token]; }
 function tapePush(token, now){
@@ -1502,8 +1526,8 @@ function wsHandle(m){
     const b = bookOf(m.asset_id);
     b.bids = new Map((m.bids || []).map(x => [+x.price, +x.size]).filter(x => x[1] > 0));
     b.asks = new Map((m.asks || []).map(x => [+x.price, +x.size]).filter(x => x[1] > 0));
-    if (m.last_trade_price) b.last = +m.last_trade_price;
     bookTop(b);
+    if (m.last_trade_price) b.last = fixLast(m.asset_id, b, +m.last_trade_price);
     tapePush(m.asset_id, now);
   } else if (m.event_type === "price_change" && m.price_changes) {
     for (const c of m.price_changes) {
@@ -1517,7 +1541,8 @@ function wsHandle(m){
       tapePush(c.asset_id, now);
     }
   } else if (m.event_type === "last_trade_price") {
-    bookOf(m.asset_id).last = +m.price;
+    const b = bookOf(m.asset_id);
+    b.last = fixLast(m.asset_id, b, +m.price);
     tapePush(m.asset_id, now);
   }
 }
@@ -1544,12 +1569,15 @@ const TREND_RANGES = {
   "1w": { interval:"1w", fidelity:15, label:"1W" }, "1m": { interval:"1m", fidelity:60, label:"1M" }, "max": { interval:"max", fidelity:180, label:"All" },
 };
 /* Expected seats from the latest order-book prices of every bracket, normalised to 120. */
+// Seats always use the midpoint, the price the simulation reads, whatever price the odds chart is showing:
+// microprice on a 40¢-wide book of a few dollars swings a whole seat on one small order.
+const SEAT_PRICE = "mid";
 function expectedNow(){
   const M = S.model, means = {};
   for (const p of PARTIES) {
     const m = M[p.key];
-    if (m.sb) { let s = 0, w = 0; for (const x of m.sb.b) { const v = livePrice(x.tokens[0]) ?? x.p; s += v * x.mid; w += v; } means[p.key] = w ? s / w : m.sb.mean; }
-    else means[p.key] = m.passMkt ? (livePrice(m.passMkt.tokens[0]) ?? m.passMkt.p) * 4.5 : 0;
+    if (m.sb) { let s = 0, w = 0; for (const x of m.sb.b) { const v = livePrice(x.tokens[0], SEAT_PRICE) ?? x.p; s += v * x.mid; w += v; } means[p.key] = w ? s / w : m.sb.mean; }
+    else means[p.key] = m.passMkt ? (livePrice(m.passMkt.tokens[0], SEAT_PRICE) ?? m.passMkt.p) * 4.5 : 0;
   }
   const tot = Object.values(means).reduce((a, b) => a + b, 0) || 1;
   for (const k in means) means[k] *= 120 / tot;
@@ -1610,7 +1638,7 @@ function drawTrend(){
     if (sc.options.bounds !== "data") return;
     const pad = Math.max((sc.max - sc.min) * 0.08, 0.3);
     sc.min = Math.max(0, sc.min - pad); sc.max = Math.min(120, sc.max + pad);
-  } });
+  } }, v => `${Math.round(v)} (${v.toFixed(3)})`);
   const T = S.trend, pts = arr => arr.map((y, i) => ({ x: T.times[i], y }));
   const win = TREND_RANGES[S.trendRange].windowMs, stepped = win ? "before" : false, y = S.trendChart.options.scales.y;
   let ds;
@@ -1670,8 +1698,8 @@ function drawBars(){
         datasets: { bar: { barPercentage: .88, categoryPercentage: .94, borderWidth: 0 } },
         plugins: { legend: { display: false },
           tooltip: { backgroundColor: t.surface, titleColor: t.ink, bodyColor: t.ink, footerColor: t.text, borderColor: t.grid, borderWidth: 1, padding: 10, boxPadding: 4, itemSort: (a, b) => b.datasetIndex - a.datasetIndex,
-            callbacks: { title: it => it.length ? S.barsTitles[it[0].dataIndex] : "", label: c => ` ${c.dataset.label}: ${c.parsed.y.toFixed(1)}`,
-              footer: it => S.trendMode === "blocs" ? "" : Object.entries(BLOCS).map(([b, B]) => `${B.short} ${it.filter(x => PBYKEY[x.dataset.key].bloc === b).reduce((s, x) => s + x.parsed.y, 0).toFixed(1)}`).join(" · ") } } },
+            callbacks: { title: it => it.length ? S.barsTitles[it[0].dataIndex] : "", label: c => ` ${c.dataset.label}: ${Math.round(c.parsed.y)} (${c.parsed.y.toFixed(3)})`,
+              footer: it => S.trendMode === "blocs" ? "" : Object.entries(BLOCS).map(([b, B]) => `${B.short} ${(t => `${Math.round(t)} (${t.toFixed(3)})`)(it.filter(x => PBYKEY[x.dataset.key].bloc === b).reduce((s, x) => s + x.parsed.y, 0))}`).join(" · ") } } },
         scales: {
           x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { color: t.text, maxRotation: 0, autoSkip: true, maxTicksLimit: 8, font: { family: "IBM Plex Mono", size: 10 } } },
           y: { stacked: true, min: 0, max: 120, grid: { color: t.grid, drawTicks: false }, border: { display: false }, ticks: { color: t.text, stepSize: 20, padding: 6, font: { family: "IBM Plex Mono", size: 10 } } },
@@ -1700,9 +1728,13 @@ function renderTrendLegend(){
     return tp[tp.length - 1].v[key] - tp[stepAt(tp, now - w, "t")].v[key];
   };
   const tag = (v, unit) => v == null ? "" : `<span class="vel-tag chg ${v > 0.005 ? "up" : v < -0.005 ? "down" : "muted"}" title="Seats gained over the last ${unit}">${v > 0.005 ? "▲" : v < -0.005 ? "▼" : "▬"} ${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(2)}/${unit}</span>`;
+  // Whole seats come from the latest party values, allocated so they add up to 120.
+  const last = k => { const a = S.trend?.series[k] || []; return a[a.length - 1] ?? 0; };
+  const al = allocate(PARTIES.map(p => last(p.key))), W = Object.fromEntries(PARTIES.map((p, k) => [p.key, al[k]]));
+  const whole = d => d.bloc ? blocKeys(d.bloc).reduce((s, k) => s + W[k], 0) : W[d.party];
   $("#trendLegend").innerHTML = ds.map(d => {
     const a = d.data[0]?.y ?? 0, b = d.data[d.data.length - 1]?.y ?? 0, dd = b - a;
-    return `<span class="li"><i class="sw" style="background:${d.borderColor}"></i>${esc(d.label)} <b>${b.toFixed(1)}</b> <span class="chg ${dd > 0.05 ? "up" : dd < -0.05 ? "down" : "muted"}">${dd >= 0 ? "+" : "−"}${Math.abs(dd).toFixed(1)}</span> ${tag(sv(d, 1000), "1s")} ${tag(sv(d, 60000), "1m")}</span>`;
+    return `<span class="li"><i class="sw" style="background:${d.borderColor}"></i>${esc(d.label)} <b>${seatHTML(b, whole(d))}</b> <span class="chg ${dd > 0.05 ? "up" : dd < -0.05 ? "down" : "muted"}">${dd >= 0 ? "+" : "−"}${Math.abs(dd).toFixed(1)}</span> ${tag(sv(d, 1000), "1s")} ${tag(sv(d, 60000), "1m")}</span>`;
   }).join("");
 }
 function tickTrend(now){
@@ -1921,7 +1953,7 @@ async function poll(first){
     console.error(e);
     $("#dot").className = "dot err";
     $("#errbox").hidden = false;
-    $("#errbox").textContent = Object.keys(S.ev).length ? `Couldn't reach Polymarket (${e.message}). Showing the last data received; retrying every ${POLL_MS / 1000} seconds.` : `Couldn't reach Polymarket (${e.message}). Retrying every ${POLL_MS / 1000} seconds.`;
+    $("#errbox").textContent = Object.keys(S.ev).length ? `Couldn't reach Polymarket (${e.message}). Showing the last data received; retrying every ${POLL_MS / 1000} seconds.` : "Claude artifacts block requests to other sites, so this copy can't load Polymarket data. Save the page as an .html file and open it in your browser to run the live tracker.";
     if (first && !Object.keys(S.ev).length) { S.nextAt = Date.now() + POLL_MS; setTimeout(() => poll(true), POLL_MS); return; }
   }
   S.nextAt = Date.now() + POLL_MS;
