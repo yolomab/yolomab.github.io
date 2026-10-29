@@ -221,7 +221,7 @@ const DK = {
   nadh: { x: 415, y: 641 }, fadh: { x: 600, y: 607 },
   qI: { x: 497, y: 450 }, qII: { x: 600, y: 425 }, qIII: { x: 771, y: 446 },
   cIII: { x: 892, y: 322 }, cIV: { x: 1104, y: 304 }, o2: { x: 1145, y: 584 },
-  adp: { x: 1400, y: 733 }, pi: { x: 1462, y: 733 }
+  adp: { x: 1402, y: 726 }, pi: { x: 1460, y: 726 }
 };
 Object.values(DK).forEach(d => d.occ = null);
 
@@ -324,8 +324,8 @@ function reset(mode = S.mode) {
 }
 
 /* ---------------- physics ---------------- */
-function collideRects(o, hw, hh) {
-  for (const r of RECTS) {
+function collideRects(o, hw, hh, rects = RECTS) {
+  for (const r of rects) {
     if (o.x + hw <= r[0] || o.x - hw >= r[2] || o.y + hh <= r[1] || o.y - hh >= r[3]) continue;
     const pl = o.x + hw - r[0], pr = r[2] - (o.x - hw), pt = o.y + hh - r[1], pb = r[3] - (o.y - hh);
     const m = Math.min(pl, pr, pt, pb);
@@ -375,6 +375,19 @@ function want(k) {
   }
   return null;
 }
+// Matrix binding spots: an occupied spot keeps everyone off it, an empty one keeps
+// out molecules that don't bind there, so the spot stays visible and reachable.
+const DOCK_FOR = { nadh: 'NADH', fadh: 'FADH2', o2: 'O2', adp: 'ADP', pi: 'Pi' };
+function dockedBoxes(k) {
+  const out = [];
+  for (const [key, t] of Object.entries(DOCK_FOR)) {
+    const d = DK[key], o = d.occ;
+    if (!o && k.type === t) continue;
+    const [w, hh] = o ? [o.w, o.h] : SIZES[t];
+    out.push([d.x - w / 2 - 6, d.y - hh / 2 - 6, d.x + w / 2 + 6, d.y + hh / 2 + 6]);
+  }
+  return out;
+}
 function dockTo(k, d) { d.occ = k; k.dock = d; k.dockT = 0; k.wait = 0; k.hopCd = 0; }
 function undock(k, vx, vy) { if (k.dock) k.dock.occ = null; k.dock = null; k.cool = .7; k.vx = vx; k.vy = vy; }
 
@@ -388,8 +401,10 @@ function updCarrier(k, h) {
   if (k.cool <= 0) {
     const w = want(k);
     if (w) {
-      const dx = w.d.x - k.x, dy = w.d.y - k.y, dd = Math.hypot(dx, dy) || 1;
-      const a = P.att * (w.weak ? .35 : 1) * (dd < 140 && !w.weak ? 2.2 : 1) * (k.type === 'ADP' || k.type === 'Pi' ? 1.8 : 1);
+      // a taken spot: queue a little way below it instead of crowding on top
+      const qy = w.weak && k.comp === 'mat' ? 75 : 0;
+      const dx = w.d.x - k.x, dy = w.d.y + qy - k.y, dd = Math.hypot(dx, dy) || 1;
+      const a = P.att * (w.weak ? .5 : 1) * (dd < 140 && !w.weak ? 2.2 : 1) * (k.type === 'ADP' || k.type === 'Pi' ? 1.8 : 1);
       k.vx += a * dx / dd * h; k.vy += a * dy / dd * h;
       if (!w.weak && dd < 24 && !w.d.occ) dockTo(k, w.d);
     } else if (k.type === 'Q') k.vx += (640 - k.x) * .25 * h;
@@ -397,7 +412,7 @@ function updCarrier(k, h) {
   }
   const damp = Math.exp(-P.gam * h); k.vx *= damp; k.vy *= damp;
   k.x += k.vx * h; k.y += k.vy * h;
-  if (k.comp === 'mat') collideRects(k, k.w / 2, k.h / 2);
+  if (k.comp === 'mat') { collideRects(k, k.w / 2, k.h / 2); collideRects(k, k.w / 2, k.h / 2, dockedBoxes(k)); }
   carrierBounds(k);
 }
 function repel() {
@@ -623,7 +638,7 @@ function updSynth(h) {
       SY.steps++; SY.lastTick = S.t;
       if (SY.steps % SY.perATP === 0 && adp && pi) {
         adp.dead = pi.dead = true; DK.adp.occ = DK.pi.occ = null;
-        const a = mkCarrier('ATP', 1431, 750); a.vy = 130; a.vx = rand(-30, 30);
+        const a = mkCarrier('ATP', 1431, 760); a.vy = 160; a.vx = rand(-30, 30);
         S.atp++; S.atpLog.push(S.t);
         addRing(1431, 740, COL.ATP); addText(1431, 790, '+ATP', COL.ATP, 18);
       }
@@ -838,6 +853,7 @@ function drawCarrier(k) {
   const empty = (k.type === 'Q' && !k.e.length) || (k.type === 'cyt' && !k.e.length) || k.type === 'NAD' || k.type === 'FAD';
   g.save(); g.globalAlpha = k.alpha;
   if (k.type === 'ATP') { g.shadowColor = COL.ATP; g.shadowBlur = 18; }
+  else if (k.dock === DK.adp || k.dock === DK.pi) { g.shadowColor = c; g.shadowBlur = 16; }
   const r = k.h / 2;
   roundPoly(g, [[x - k.w / 2, y - r], [x + k.w / 2, y - r], [x + k.w / 2, y + r], [x - k.w / 2, y + r]], k.type === 'cyt' ? 18 : r);
   g.fillStyle = off ? (dark ? '#2a252b' : '#dcd6d9') : dark ? mix(c, '#120c12', empty ? .72 : .5) : mix(c, '#ffffff', empty ? .8 : .55);
@@ -848,6 +864,19 @@ function drawCarrier(k) {
   g.fillStyle = off ? (dark ? '#8c8290' : '#6f666c') : dark ? mix(c, '#ffffff', .45) : mix(c, '#000000', .55);
   g.font = `700 ${k.type === 'cyt' ? 17 : 15}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(label, x, y + 1);
   g.restore();
+}
+// Dashed outlines under the F1 head show where ADP and Pi bind.
+function drawBindingSite() {
+  const g = ctx;
+  for (const [d, t] of [[DK.adp, 'ADP'], [DK.pi, 'Pi']]) {
+    if (d.occ) continue;
+    const [w, hh] = SIZES[t], r = hh / 2;
+    g.save(); g.globalAlpha = S.flags.ATP ? .75 : .35;
+    roundPoly(g, [[d.x - w / 2, d.y - r], [d.x + w / 2, d.y - r], [d.x + w / 2, d.y + r], [d.x - w / 2, d.y + r]], r);
+    g.setLineDash([5, 4]); g.lineWidth = 2; g.strokeStyle = CCOL[t]; g.stroke();
+    g.fillStyle = CCOL[t]; g.font = `700 14px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(LABEL[t], d.x, d.y + 1);
+    g.restore();
+  }
 }
 function ehue(E) { return 55 - 205 * (1 - clamp(E, 0, 1)); }
 function drawElectron(e) {
@@ -896,7 +925,9 @@ function render() {
   drawStairGuide(true);
   for (const p of SY.stair) if (p && p.state === 'stair' && p.z >= 0) drawProton(p);
   for (const c of CHAIN) drawComplex(c);
-  for (const k of carriers) drawCarrier(k);
+  drawBindingSite();
+  for (const k of carriers) if (!k.dock) drawCarrier(k);
+  for (const k of carriers) if (k.dock) drawCarrier(k);
   for (const p of protons) if (p.state !== 'stair') drawProton(p);
   g.globalCompositeOperation = dark ? 'lighter' : 'source-over';
   for (const e of electrons) drawElectron(e);
