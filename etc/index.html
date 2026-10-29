@@ -122,6 +122,7 @@ canvas#scene{display:block;width:100%;min-width:760px;aspect-ratio:16/9;cursor:d
 .inspect .inhl{margin-top:6px;font-size:.78rem}
 .foot{font-size:.76rem;color:var(--muted);margin-top:14px}
 a{color:var(--accent)}
+.err{margin:0;padding:10px 12px;background:color-mix(in srgb,var(--bad) 12%,var(--surface));color:var(--bad);font-size:.86rem;border-bottom:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -147,6 +148,7 @@ a{color:var(--accent)}
       <button class="btn" id="addF"><span class="sw" style="background:#e0527a"></span>+ FADH₂</button>
       <label class="speed">Speed <input type="range" id="speed" min="0.25" max="3" step="0.25" value="1"><output id="speedOut" class="num">1×</output></label>
     </div>
+    <p id="err" class="err" role="alert" hidden></p>
     <div class="stage" id="stage">
       <canvas id="scene" aria-label="Animated electron transport chain in the inner mitochondrial membrane"></canvas>
       <div id="tip"></div>
@@ -195,6 +197,14 @@ a{color:var(--accent)}
 </main>
 
 <script>
+// If anything fails, say so on the page instead of leaving a blank scene.
+addEventListener('error', ev => {
+  const el = document.getElementById('err'); if (!el) return;
+  el.hidden = false; el.textContent = 'The simulation hit an error: ' + (ev.message || ev.error) + '. Try reloading the page.';
+});
+</script>
+<script>
+(() => {
 'use strict';
 /* ============================================================
    Electron Transport Chain — semi-emergent particle simulation
@@ -730,6 +740,7 @@ const protonSprite = document.createElement('canvas');
 function themeDark() { const t = document.documentElement.dataset.theme; return t ? t === 'dark' : mq.matches; }
 function resize() {
   const r = cvs.getBoundingClientRect(); dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (r.width < 2) return; // hidden or not laid out yet; try again once the frame has a size
   cvs.width = Math.round(r.width * dpr); cvs.height = Math.round(r.width * 9 / 16 * dpr);
   scale = cvs.width / W; buildBg();
 }
@@ -1167,20 +1178,25 @@ cvs.addEventListener('click', ev => { if (dragMoved) return; const h = hit(...sc
 /* ---------- loop ---------- */
 let last = performance.now(), acc = 0, uiT = 0;
 const HSTEP = 1 / 120;
+// Schedule the next frame first so one bad frame can't stop the animation for good.
+let renderErr = false;
 function frame(now) {
+  requestAnimationFrame(frame);
   const dt = Math.min(.1, (now - last) / 1000); last = now;
   if (!S.paused) { acc += dt * S.speed; let n = 0; while (acc >= HSTEP && n < 60) { step(HSTEP); acc -= HSTEP; n++; } if (n === 60) acc = 0; }
-  render();
+  if (!cvs.width || !cvs.height) resize();
+  if (cvs.width && cvs.height) { try { render(); } catch (err) { if (!renderErr) { renderErr = true; console.error(err); } } }
   uiT += dt; if (uiT > .2) { uiT = 0; updateUI(); }
-  requestAnimationFrame(frame);
 }
 new ResizeObserver(resize).observe(cvs);
+addEventListener('resize', resize);
 mq.addEventListener('change', buildBg);
 document.fonts && document.fonts.ready.then(buildBg);
 resize(); reset('steady'); syncToggles(); showInfo(null); updateUI();
 requestAnimationFrame(frame);
 // test hook
 window.__etc = { S, CX, SY, DK, step, reset, get carriers() { return carriers; }, get protons() { return protons; }, get electrons() { return electrons; } };
+})();
 </script>
 </body>
 </html>
