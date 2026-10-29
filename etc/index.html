@@ -157,7 +157,7 @@ a{color:var(--accent)}
   <div class="panels">
     <section class="panel">
       <h2>Components &amp; inhibitors</h2>
-      <p class="hint">Switch a part off — or click it in the scene — and watch where the chain stalls.</p>
+      <p class="hint">Switch a part off (or click a complex in the scene) and watch where the chain stalls. You can also drag any molecule or proton.</p>
       <div class="togs" id="togs"></div>
       <button class="btn restore" id="restore">Restore everything</button>
     </section>
@@ -359,7 +359,7 @@ function want(k) {
   switch (k.type) {
     case 'NADH': return d(DK.nadh, f.I);
     case 'FADH2': return d(DK.fadh, f.II);
-    case 'O2': return d(DK.o2, f.IV);
+    case 'O2': case 'O': return d(DK.o2, f.IV);
     case 'ADP': return d(DK.adp, f.ATP);
     case 'Pi': return d(DK.pi, f.ATP);
     case 'cyt': return k.e.length ? d(DK.cIV, f.IV) : d(DK.cIII, f.III);
@@ -391,8 +391,14 @@ function dockedBoxes(k) {
 function dockTo(k, d) { d.occ = k; k.dock = d; k.dockT = 0; k.wait = 0; k.hopCd = 0; }
 function undock(k, vx, vy) { if (k.dock) k.dock.occ = null; k.dock = null; k.cool = .7; k.vx = vx; k.vy = vy; }
 
+// While held, an object eases toward the pointer; its velocity carries over as a flick on release.
+function followPointer(o, h) {
+  const a = 1 - Math.exp(-30 * h), nx = o.x + (o.dragX - o.x) * a, ny = o.y + (o.dragY - o.y) * a;
+  o.vx = clamp((nx - o.x) / h, -900, 900); o.vy = clamp((ny - o.y) / h, -900, 900); o.x = nx; o.y = ny;
+}
 function updCarrier(k, h) {
   k.life += h; if (k.cool > 0) k.cool -= h;
+  if (k.drag) { followPointer(k, h); carrierBounds(k); return; }
   if (k.fading) { k.alpha -= h * 1.4; if (k.alpha <= 0) k.dead = true; }
   if (k.dock) { const a = 1 - Math.exp(-14 * h); k.x += (k.dock.x - k.x) * a; k.y += (k.dock.y - k.y) * a; k.dockT += h; return; }
   if (frozen(k)) { k.vx *= .85; k.vy *= .85; k.x += k.vx * h; k.y += k.vy * h; carrierBounds(k); return; }
@@ -437,7 +443,7 @@ function updHop(e, h) {
 /* ---------------- protons ---------------- */
 function requestProtons(getter, n, cb) {
   const [tx, ty] = getter();
-  const free = protons.filter(p => p.state === 'free' && p.comp === 'mat').sort((a, b) => dist(a.x, a.y, tx, ty) - dist(b.x, b.y, tx, ty));
+  const free = protons.filter(p => p.state === 'free' && p.comp === 'mat' && !p.drag).sort((a, b) => dist(a.x, a.y, tx, ty) - dist(b.x, b.y, tx, ty));
   for (let i = 0; i < n; i++) {
     let p = free[i];
     if (!p || dist(p.x, p.y, tx, ty) > 320) p = mkProton(tx + rand(-30, 30), Math.max(ty + 40, Y.imBot + 16), 'mat', true);
@@ -449,7 +455,7 @@ function tryPump(c, h) {
   if (Math.random() > 1 - Math.exp(-rate * h)) return false;
   const ch = c.channels[c.chan++ % c.channels.length], [x0, y0] = ch;
   let best = null, bd = 260;
-  for (const p of protons) if (p.state === 'free' && p.comp === 'mat') { const d = dist(p.x, p.y, x0, y0); if (d < bd) { bd = d; best = p; } }
+  for (const p of protons) if (p.state === 'free' && p.comp === 'mat' && !p.drag) { const d = dist(p.x, p.y, x0, y0); if (d < bd) { bd = d; best = p; } }
   if (!best) best = mkProton(x0 + rand(-14, 14), y0 + 22, 'mat', true);
   best.state = 'pumpIn'; best.ch = ch; best.spd = 160; S.nIMS++;
   return true;
@@ -461,6 +467,7 @@ function updProton(p, h) {
   if (p.glow) p.glow = Math.max(0, p.glow - h * 1.2);
   switch (p.state) {
     case 'free': {
+      if (p.drag) { followPointer(p, h); if (p.comp === 'ims') bounce(p, 9, W - 9, Y.imsTop + 10, Y.imTop - 10); else bounce(p, 9, W - 9, Y.imBot + 10, H - 10); break; }
       const P = PHYS.prot, sq = Math.sqrt(h);
       p.vx += P.sig * sq * gauss(); p.vy += P.sig * sq * gauss();
       if (p.comp === 'ims') {
@@ -1105,33 +1112,57 @@ const CARRIER_INFO = { NADH: 'NADH', NAD: 'NAD', FADH2: 'FADH2', FAD: 'FAD', Q: 
 const TOGGLE_OF = { Q: 'Q', C: 'C', I: 'I', II: 'II', III: 'III', IV: 'IV', ATP: 'ATP' };
 let hoverKey = null, hoverCarrier = null;
 const tip = document.getElementById('tip'), stage = document.getElementById('stage');
+let held = null, dragMoved = false, downXY = null;
+// Molecules mid-handoff can't be picked up: pulling them away would strand an electron or proton.
+function canGrab(k) { return !k.fading && !k.incoming && !k.Hpend && !(k.dock === DK.o2 && CX.IV.rx); }
+function grabAt(x, y) {
+  for (let i = carriers.length - 1; i >= 0; i--) { const k = carriers[i]; if (Math.abs(x - k.x) < k.w / 2 + 6 && Math.abs(y - k.y) < k.h / 2 + 6) return canGrab(k) ? k : null; }
+  for (const p of protons) if (p.state === 'free' && Math.abs(x - p.x) < 15 && Math.abs(y - p.y) < 15) return p;
+  return null;
+}
 function hit(x, y) {
   for (let i = carriers.length - 1; i >= 0; i--) { const k = carriers[i]; if (Math.abs(x - k.x) < k.w / 2 + 4 && Math.abs(y - k.y) < k.h / 2 + 4) return { key: CARRIER_INFO[k.type], k }; }
   for (const c of CHAIN) if (c.rects.some(r => x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3])) return { key: c.id };
   if (x >= 1344 && x <= 1516 && y >= 360 && y <= 722) return { key: 'ATP' };
-  for (const p of protons) if (Math.abs(x - p.x) < 11 && Math.abs(y - p.y) < 11) return { key: 'H' };
+  for (const p of protons) if (Math.abs(x - p.x) < 15 && Math.abs(y - p.y) < 15) return { key: 'H' };
   return null;
 }
 function sceneXY(ev) { const r = cvs.getBoundingClientRect(); return [(ev.clientX - r.left) * W / r.width, (ev.clientY - r.top) * H / r.height]; }
 function showInfo(key) {
   const el = document.getElementById('inspect');
-  if (!key) { el.innerHTML = '<p>Hover or tap anything in the scene to learn what it does. Click a complex or carrier to switch it off.</p>'; return; }
+  if (!key) { el.innerHTML = '<p>Hover or tap anything in the scene to learn what it does. Drag any molecule or proton to move it, and click a complex to switch it off.</p>'; return; }
   const [t, c, d, inh] = INFO[key];
-  el.innerHTML = `<h3><i style="background:${c}"></i>${t}</h3><p>${d}</p>${inh ? `<p class="inhl">Blocked by: <b>${inh}</b>${TOGGLE_OF[key] ? ' · click it to toggle' : ''}</p>` : (TOGGLE_OF[key] ? '<p class="inhl">Click it to switch it off</p>' : '')}`;
+  el.innerHTML = `<h3><i style="background:${c}"></i>${t}</h3><p>${d}</p>${inh ? `<p class="inhl">Blocked by: <b>${inh}</b> · click it to toggle</p>` : '<p class="inhl">Drag it to move it around</p>'}`;
 }
+cvs.addEventListener('pointerdown', ev => {
+  const [x, y] = sceneXY(ev), o = grabAt(x, y);
+  dragMoved = false; downXY = [x, y];
+  if (!o) return;
+  held = o; o.drag = true; o.dragX = x; o.dragY = y;
+  if (o.dock) undock(o, 0, 0);
+  o.cool = 0; cvs.setPointerCapture(ev.pointerId); cvs.style.cursor = 'grabbing'; tip.style.opacity = 0;
+});
+// on touch screens, a finger on a molecule drags it instead of scrolling the scene
+cvs.addEventListener('touchstart', ev => { if (held) ev.preventDefault(); }, { passive: false });
+cvs.addEventListener('touchmove', ev => { if (held) ev.preventDefault(); }, { passive: false });
+function release() { if (held) { held.drag = false; held = null; cvs.style.cursor = 'grab'; } }
+cvs.addEventListener('pointerup', release);
+cvs.addEventListener('pointercancel', release);
 cvs.addEventListener('pointermove', ev => {
-  const [x, y] = sceneXY(ev), h = hit(x, y);
+  const [x, y] = sceneXY(ev);
+  if (held) { held.dragX = x; held.dragY = y; if (downXY && dist(x, y, ...downXY) > 5) dragMoved = true; return; }
+  const h = hit(x, y);
   hoverKey = h && !h.k ? h.key : (h && h.k ? 'carrier' : null); hoverCarrier = h && h.k || null;
   if (h && h.key !== 'H') {
     const sr = stage.getBoundingClientRect();
-    tip.textContent = INFO[h.key][0] + (TOGGLE_OF[h.key] ? ' · click to ' + (S.flags[TOGGLE_OF[h.key]] ? 'block' : 'restore') : '');
+    tip.textContent = INFO[h.key][0] + (h.k ? ' · drag to move' : TOGGLE_OF[h.key] ? ' · click to ' + (S.flags[TOGGLE_OF[h.key]] ? 'block' : 'restore') : '');
     tip.style.left = (ev.clientX - sr.left + stage.scrollLeft) + 'px'; tip.style.top = (ev.clientY - sr.top) + 'px'; tip.style.opacity = 1;
   } else tip.style.opacity = 0;
-  cvs.style.cursor = h && TOGGLE_OF[h.key] ? 'pointer' : 'default';
+  cvs.style.cursor = grabAt(x, y) ? 'grab' : h && TOGGLE_OF[h.key] ? 'pointer' : 'default';
   if (h) showInfo(h.key);
 });
 cvs.addEventListener('pointerleave', () => { hoverKey = hoverCarrier = null; tip.style.opacity = 0; });
-cvs.addEventListener('click', ev => { const h = hit(...sceneXY(ev)); if (h) { showInfo(h.key); if (TOGGLE_OF[h.key]) toggle(TOGGLE_OF[h.key]); } });
+cvs.addEventListener('click', ev => { if (dragMoved) return; const h = hit(...sceneXY(ev)); if (h) { showInfo(h.key); if (!h.k && TOGGLE_OF[h.key]) toggle(TOGGLE_OF[h.key]); } });
 
 /* ---------- loop ---------- */
 let last = performance.now(), acc = 0, uiT = 0;
