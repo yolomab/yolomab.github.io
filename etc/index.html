@@ -1,0 +1,1124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Electron Transport Chain Simulator</title>
+<meta name="description" content="Interactive electron transport chain: watch electrons fall from NADH and FADH2 to oxygen, energise complexes to pump protons, and drive ATP synthase. Block any component to see where the chain stalls.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: header with mode switch, a scene card (toolbar, canvas, live flow strip), then three panels: components, readout, explanation. */
+:root{
+  --bg:#f7f2f3; --surface:#ffffff; --sunk:#f1e9eb; --ink:#21171f; --muted:#6e5f6a; --line:#e7dce0;
+  --accent:#c2416c; --ok:#1f9d5a; --warn:#d48a10; --bad:#d23c4a; --idle:#a69aa2;
+  --f-display:"Outfit", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f0b10; --surface:#18121a; --sunk:#211a24; --ink:#f2eaef; --muted:#a8979f; --line:#2f2533;
+    --accent:#f0739b; --ok:#3fd283; --warn:#f2b13d; --bad:#ff6b78; --idle:#75687a;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f0b10; --surface:#18121a; --sunk:#211a24; --ink:#f2eaef; --muted:#a8979f; --line:#2f2533;
+  --accent:#f0739b; --ok:#3fd283; --warn:#f2b13d; --bad:#ff6b78; --idle:#75687a;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1400px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2{font-family:var(--f-display);margin:0;letter-spacing:-.01em;text-wrap:balance}
+h1{font-size:clamp(1.6rem,3.4vw,2.4rem);font-weight:800;line-height:1.05}
+h2{font-size:1.1rem;font-weight:700}
+.eyebrow{font:600 .7rem/1.2 var(--f-body);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:14px 24px;padding-block:22px 16px}
+header.top p.sub{margin:6px 0 0;color:var(--muted);max-width:62ch;font-size:.92rem}
+.seg{display:inline-flex;background:var(--sunk);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:transparent;padding:7px 13px;border-radius:7px;font-weight:500;font-size:.88rem;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 11px;font-size:.86rem;font-weight:500}
+.btn:hover{background:var(--sunk)}
+.btn.primary{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.btn.primary:hover{opacity:.9}
+.btn .sw{width:10px;height:10px;border-radius:50%}
+.speed{display:flex;align-items:center;gap:8px;margin-left:auto;font-size:.82rem;color:var(--muted)}
+.speed input{width:120px;accent-color:var(--accent)}
+.speed output{min-width:3.2em;color:var(--ink)}
+.stage{position:relative;overflow-x:auto;background:var(--sunk)}
+canvas#scene{display:block;width:100%;min-width:760px;aspect-ratio:16/9;cursor:default;touch-action:manipulation}
+#tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--surface);font-size:.78rem;padding:4px 8px;border-radius:6px;white-space:nowrap;transform:translate(-50%,-130%);opacity:0;transition:opacity .12s}
+
+.flow{display:grid;gap:8px;padding:12px;border-top:1px solid var(--line)}
+.flow-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.flow-row .lab{font:600 .68rem/1 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);width:78px;flex:none}
+.chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:999px;padding:4px 10px 4px 8px;font-size:.8rem;background:var(--surface);white-space:nowrap}
+.chip i{width:9px;height:9px;border-radius:50%;background:var(--idle);flex:none}
+.chip small{color:var(--muted);font-size:.72rem}
+.chip.active i{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 25%,transparent)}
+.chip.stalled{border-color:color-mix(in srgb,var(--warn) 60%,var(--line))}
+.chip.stalled i{background:var(--warn);animation:blink 1s infinite}
+.chip.stalled small{color:var(--warn)}
+.chip.blocked{border-color:color-mix(in srgb,var(--bad) 60%,var(--line));background:color-mix(in srgb,var(--bad) 8%,var(--surface))}
+.chip.blocked i{background:var(--bad)}
+.chip.blocked small{color:var(--bad)}
+.arr{color:var(--muted);font-size:.85rem}
+@keyframes blink{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.chip.stalled i{animation:none}}
+
+.panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:16px;padding-block:16px 50px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;min-width:0}
+.panel p.hint{margin:4px 0 12px;color:var(--muted);font-size:.84rem}
+.togs{display:grid;gap:6px}
+.tog{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:7px 10px}
+.tog:hover{background:var(--sunk)}
+.tog .sw{position:relative;width:32px;height:18px;border-radius:999px;background:var(--idle);transition:background .15s}
+.tog .sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s}
+.tog[aria-pressed="true"] .sw{background:var(--c,var(--ok))}
+.tog[aria-pressed="true"] .sw::after{transform:translateX(14px)}
+.tog .nm{font-weight:500;font-size:.88rem}
+.tog .inh{font-size:.74rem;color:var(--muted)}
+.tog[aria-pressed="false"] .inh{color:var(--bad);font-weight:600}
+.tog.inverse[aria-pressed="true"] .inh{color:var(--warn);font-weight:600}
+.togsep{font:600 .68rem/1 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:10px 0 2px}
+.restore{margin-top:10px}
+
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;margin-top:10px}
+.stat b{display:block;font:700 1.45rem/1.1 var(--f-display);font-variant-numeric:tabular-nums}
+.stat span{font-size:.75rem;color:var(--muted)}
+.stat.big b{font-size:2.1rem;color:var(--ok)}
+.meter{margin-top:14px}
+.meter .row{display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted)}
+.bar{position:relative;height:12px;border-radius:6px;background:var(--sunk);overflow:hidden;margin-top:4px}
+.bar span{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#d9a521,#e0527a);border-radius:6px;transition:width .25s}
+.elegend{margin-top:16px}
+.elegend .grad{height:10px;border-radius:5px;margin-top:4px}
+.elegend .ticks{display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-top:3px}
+.expect{margin-top:12px;font-size:.8rem;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+
+.diag{display:grid;gap:8px;margin-top:10px}
+.diag p{margin:0;font-size:.88rem;padding:9px 11px;border-radius:9px;background:var(--sunk);border-left:3px solid var(--idle)}
+.diag p.ok{border-left-color:var(--ok)}
+.diag p.blocked{border-left-color:var(--bad)}
+.diag p.warn{border-left-color:var(--warn)}
+.diag .now{font-size:.8rem;color:var(--muted)}
+.inspect{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+.inspect h3{font:700 .98rem var(--f-display);margin:0 0 4px;display:flex;align-items:center;gap:8px}
+.inspect h3 i{width:11px;height:11px;border-radius:50%;flex:none}
+.inspect p{margin:0;font-size:.86rem;color:var(--muted)}
+.inspect .inhl{margin-top:6px;font-size:.78rem}
+.foot{font-size:.76rem;color:var(--muted);margin-top:14px}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header class="wrap top">
+  <div>
+    <p class="eyebrow">Oxidative phosphorylation · live simulation</p>
+    <h1>Electron Transport Chain</h1>
+    <p class="sub">Electrons tumble downhill from NADH and FADH₂ to oxygen. Each energy drop shakes a complex hard enough to pump a proton; protons spiral back through ATP synthase to make ATP.</p>
+  </div>
+  <div class="seg" role="group" aria-label="Scenario">
+    <button data-mode="steady" aria-pressed="true">Steady state</button>
+    <button data-mode="glucose" aria-pressed="false">One glucose</button>
+    <button data-mode="single" aria-pressed="false">Follow one NADH</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="card">
+    <div class="toolbar">
+      <button class="btn primary" id="play" aria-label="Pause">❚❚ Pause</button>
+      <button class="btn" id="reset">↺ Reset</button>
+      <button class="btn" id="addN"><span class="sw" style="background:#ee8434"></span>+ NADH</button>
+      <button class="btn" id="addF"><span class="sw" style="background:#e0527a"></span>+ FADH₂</button>
+      <label class="speed">Speed <input type="range" id="speed" min="0.25" max="3" step="0.25" value="1"><output id="speedOut" class="num">1×</output></label>
+    </div>
+    <div class="stage" id="stage">
+      <canvas id="scene" aria-label="Animated electron transport chain in the inner mitochondrial membrane"></canvas>
+      <div id="tip"></div>
+    </div>
+    <div class="flow" id="flow"></div>
+  </div>
+
+  <div class="panels">
+    <section class="panel">
+      <h2>Components &amp; inhibitors</h2>
+      <p class="hint">Switch a part off — or click it in the scene — and watch where the chain stalls.</p>
+      <div class="togs" id="togs"></div>
+      <button class="btn restore" id="restore">Restore everything</button>
+    </section>
+
+    <section class="panel">
+      <h2>Live readout</h2>
+      <div class="stats">
+        <div class="stat big"><b id="sATP" class="num">0</b><span>ATP made</span></div>
+        <div class="stat"><b id="sRate" class="num">0</b><span>ATP per minute (sim time)</span></div>
+        <div class="stat"><b id="sPump" class="num">0</b><span>H⁺ moved into the intermembrane space</span></div>
+        <div class="stat"><b id="sO2" class="num">0</b><span>O₂ used · <span id="sH2O">0</span> H₂O formed</span></div>
+        <div class="stat"><b id="sNADH" class="num">0 / 0</b><span>NADH / NAD⁺</span></div>
+        <div class="stat"><b id="sFAD" class="num">0 / 0</b><span>FADH₂ / FAD</span></div>
+      </div>
+      <div class="meter">
+        <div class="row"><span>Proton gradient (H⁺ in intermembrane space)</span><span class="num" id="sGrad">0</span></div>
+        <div class="bar"><span id="gradBar" style="width:0%"></span></div>
+        <div class="row"><span>empty</span><span>pumps can't push past here</span></div>
+      </div>
+      <div class="elegend">
+        <div class="row" style="font-size:.78rem;color:var(--muted)">Electron energy — hotter colour and more shaking = more energy</div>
+        <div class="grad" id="egrad"></div>
+        <div class="ticks"><span>NADH</span><span>CoQ</span><span>Cyt c</span><span>O₂</span></div>
+      </div>
+      <div class="expect" id="expect"></div>
+    </section>
+
+    <section class="panel">
+      <h2>What's happening</h2>
+      <div class="diag" id="diag"></div>
+      <div class="inspect" id="inspect"></div>
+      <p class="foot">Simplified model: 10 H⁺ per NADH, 6 per FADH₂, 4 H⁺ per ATP (3 through the rotor + 1 to import phosphate), so ≈2.5 and ≈1.5 ATP each. CoQ picks up 2 H⁺ from the matrix and releases them at Complex III.</p>
+    </section>
+  </div>
+</main>
+
+<script>
+'use strict';
+/* ============================================================
+   Electron Transport Chain — semi-emergent particle simulation
+   Coordinates are in a fixed 1600×900 scene, scaled to the canvas.
+   ============================================================ */
+const W = 1600, H = 900;
+const Y = { omTop: 58, omBot: 120, imsTop: 120, imTop: 392, imBot: 492 };
+const COL = { I:'#ee8434', II:'#e0527a', Q:'#d9a521', III:'#16a3a8', C:'#a855f7', IV:'#5b6cf0', O2:'#2f9be0', ATP:'#2fa55c' };
+// Normalised electron energy (1 = NADH, 0 = bound to O2), roughly following redox potentials.
+const EN = { NADH:1, FADH2:.70, Q:.68, C:.50, slot:.20, O2:.02, H2O:0 };
+
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+function gauss() { let u = 0; while (!u) u = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(6.283185 * Math.random()); }
+function hex(h) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+function mix(a, b, t) { const A = hex(a), B = hex(b); return `rgb(${A.map((v, i) => Math.round(lerp(v, B[i], t))).join(',')})`; }
+function rgba(h, a) { const A = hex(h); return `rgba(${A[0]},${A[1]},${A[2]},${a})`; }
+
+/* ---------------- scene geometry ---------------- */
+const DK = {
+  nadh: { x: 415, y: 641 }, fadh: { x: 600, y: 607 },
+  qI: { x: 497, y: 450 }, qII: { x: 600, y: 425 }, qIII: { x: 771, y: 446 },
+  cIII: { x: 892, y: 322 }, cIV: { x: 1104, y: 304 }, o2: { x: 1145, y: 584 },
+  adp: { x: 1400, y: 733 }, pi: { x: 1462, y: 733 }
+};
+Object.values(DK).forEach(d => d.occ = null);
+
+function mkComplex(o) { return Object.assign({ e: [], incoming: 0, charge: 0, pulse: 0, ex: 0, chan: 0, lastFlow: -9, stallT: 0 }, o); }
+const CX = {
+  I: mkComplex({ id: 'I', name: 'Complex I', color: COL.I, inhib: 'Inhibitor', ppe: 2, transit: 1.0, eIn: .97, eOut: .70,
+    rects: [[300, 370, 472, 502], [364, 480, 466, 624]],
+    poly: [[300, 370], [472, 370], [472, 502], [466, 502], [466, 624], [364, 624], [364, 502], [300, 502]], round: 22,
+    path: [[415, 620], [415, 562], [417, 506], [444, 472], [470, 452]],
+    channels: [[322, 514, 356], [346, 514, 356]], label: [386, 440], badge: [415, 572] }),
+  II: mkComplex({ id: 'II', name: 'Complex II', color: COL.II, inhib: 'Inhibitor', ppe: 0, transit: .8, eIn: .695, eOut: .685,
+    rects: [[536, 440, 664, 590]], poly: [[536, 440], [664, 440], [664, 590], [536, 590]], round: 34,
+    path: [[600, 588], [600, 545], [603, 492], [600, 448]], channels: [], label: [600, 524], badge: [600, 566] }),
+  III: mkComplex({ id: 'III', name: 'Complex III', color: COL.III, inhib: 'Inhibitor', ppe: 1, transit: .9, eIn: .66, eOut: .52,
+    rects: [[796, 344, 926, 560]], poly: [[796, 344], [926, 344], [926, 560], [796, 560]], round: 36,
+    path: [[800, 446], [830, 432], [850, 394], [870, 362], [888, 346]],
+    channels: [[836, 574, 332], [904, 574, 332]], label: [862, 484], badge: [862, 532] }),
+  IV: mkComplex({ id: 'IV', name: 'Complex IV', color: COL.IV, inhib: 'Cyanide', ppe: 1, transit: 1.0, eIn: .48, eOut: .22,
+    rects: [[1062, 326, 1228, 578]],
+    poly: [[1088, 326], [1202, 326], [1210, 468], [1236, 556], [1196, 578], [1145, 560], [1094, 578], [1054, 556], [1080, 468]], round: 18,
+    path: [[1104, 334], [1112, 388], [1124, 444], [1140, 494]],
+    channels: [[1198, 594, 312]], label: [1145, 430], badge: [1145, 470],
+    slots: [null, null], res: [false, false], slotPos: [[1118, 526], [1172, 526]], rx: false })
+};
+const CHAIN = [CX.I, CX.II, CX.III, CX.IV];
+CHAIN.forEach(c => { c.cum = [0]; for (let i = 1; i < c.path.length; i++) c.cum.push(c.cum[i - 1] + dist(...c.path[i - 1], ...c.path[i])); });
+
+// ATP synthase: protons ride the Fo rotor one full turn (12 steps of 30°) — a spiral staircase.
+const SY = { cx: 1430, yTop: 366, yBot: 518, R: 50, K: 12, perATP: 4, tickDur: .15,
+  stair: [], tick: -1, steps: 0, lastTick: -9, ex: 0, name: 'ATP synthase', id: 'ATP', inhib: 'Inhibitor',
+  rects: [[1362, 380, 1476, 506], [1420, 500, 1440, 590], [1348, 586, 1512, 716], [1494, 412, 1508, 640]], badge: [1430, 690] };
+const RECTS = [...CHAIN.flatMap(c => c.rects), ...SY.rects];
+function spiral(u) { const th = -Math.PI / 2 + u * (2 * Math.PI / SY.K); return { x: SY.cx + SY.R * Math.sin(th), y: lerp(SY.yTop, SY.yBot, u / SY.K), z: Math.cos(th) }; }
+
+function pathPt(c, t) {
+  const L = c.cum[c.cum.length - 1] * clamp(t, 0, 1);
+  for (let i = 1; i < c.path.length; i++) if (L <= c.cum[i]) {
+    const f = (L - c.cum[i - 1]) / (c.cum[i] - c.cum[i - 1] || 1);
+    return [lerp(c.path[i - 1][0], c.path[i][0], f), lerp(c.path[i - 1][1], c.path[i][1], f)];
+  }
+  return c.path[c.path.length - 1];
+}
+
+/* ---------------- state ---------------- */
+const FLAG_DEFAULT = { I: true, II: true, Q: true, III: true, C: true, IV: true, ATP: true, O2: true, ADP: true, KREBS: true, DNP: false };
+const S = { t: 0, mode: 'steady', speed: 1, paused: false, flags: { ...FLAG_DEFAULT }, CAP: 160,
+  atp: 0, atpLog: [], pumped: 0, o2used: 0, h2o: 0, lastQ: -9, lastC: -9, lastRx: -9, nIMS: 0, timers: {} };
+let protons = [], carriers = [], electrons = [], fx = [];
+let eid = 0, kid = 0;
+
+const SIZES = { NADH: [74, 32], NAD: [64, 30], FADH2: [80, 32], FAD: [56, 30], Q: [50, 26], cyt: [76, 42], O2: [46, 28], O: [32, 28], H2O: [58, 26], ADP: [56, 26], Pi: [40, 26], ATP: [58, 28] };
+const COMP = t => t === 'Q' ? 'mem' : t === 'cyt' ? 'ims' : 'mat';
+const PHYS = { prot: { sig: 330, gam: 2.4 }, mat: { sig: 130, gam: 2.0, att: 150 }, mem: { sig: 100, gam: 2.4, att: 300 }, ims: { sig: 105, gam: 2.6, att: 440 } };
+
+function mkE(E) { const e = { id: ++eid, x: 0, y: 0, E, state: 'carrier', host: null, prog: 0, hop: null, trail: [], ph1: rand(0, 6.28), ph2: rand(0, 6.28), alpha: 1, dead: false }; electrons.push(e); return e; }
+function setType(k, t) { k.type = t; k.w = SIZES[t][0]; k.h = SIZES[t][1]; k.comp = COMP(t); }
+function mkCarrier(type, x, y) {
+  const k = { id: ++kid, x, y, vx: 0, vy: 0, e: [], H: 0, Hpend: 0, Hgot: 0, dock: null, dockT: 0, cool: 0, hopCd: 0, incoming: 0, wait: 0, life: 0, alpha: 1, fading: false, regen: 0, dead: false };
+  setType(k, type);
+  if (type === 'NADH' || type === 'FADH2') for (let i = 0; i < 2; i++) attach(mkE(EN[type]), k);
+  carriers.push(k); return k;
+}
+function attach(e, k) { e.state = 'carrier'; e.host = k; k.e.push(e); }
+function mkProton(x, y, comp, fadeIn) { const p = { x, y, vx: rand(-40, 40), vy: rand(-40, 40), comp, state: 'free', alpha: fadeIn ? 0 : 1, t: 0, dead: false }; protons.push(p); return p; }
+function freeSpot(comp, w, h, x0 = 40, x1 = W - 40) {
+  for (let i = 0; i < 60; i++) {
+    const x = rand(x0, x1), y = comp === 'mat' ? rand(Y.imBot + 30, H - 30) : comp === 'ims' ? rand(Y.imsTop + 20, Y.imTop - 20) : rand(Y.imTop + 20, Y.imBot - 20);
+    if (!RECTS.some(r => x + w / 2 > r[0] - 6 && x - w / 2 < r[2] + 6 && y + h / 2 > r[1] - 6 && y - h / 2 < r[3] + 6)) return [x, y];
+  }
+  return [x0, H - 40];
+}
+function spawnC(type, x0, x1) { const [x, y] = freeSpot(COMP(type), ...SIZES[type], x0, x1); return mkCarrier(type, x, y); }
+
+/* ---------------- scenarios ---------------- */
+function reset(mode = S.mode) {
+  S.mode = mode; S.t = 0; S.atp = 0; S.atpLog = []; S.pumped = 0; S.o2used = 0; S.h2o = 0; S.lastQ = S.lastC = S.lastRx = -9; S.timers = {};
+  protons = []; carriers = []; electrons = []; fx = [];
+  Object.values(DK).forEach(d => d.occ = null);
+  CHAIN.forEach(c => { c.e = []; c.incoming = 0; c.charge = 0; c.pulse = 0; c.ex = 0; c.stallT = 0; c.lastFlow = -9; });
+  CX.IV.slots = [null, null]; CX.IV.res = [false, false]; CX.IV.rx = false;
+  SY.stair = new Array(SY.K).fill(null); SY.tick = -1; SY.steps = 0; SY.lastTick = -9; SY.ex = 0;
+
+  for (let i = 0; i < 5; i++) mkCarrier('Q', rand(520, 740), rand(412, 472));
+  for (let i = 0; i < 5; i++) mkCarrier('cyt', rand(840, 1200), rand(180, 310));
+  for (let i = 0; i < 3; i++) spawnC('O2', 900, 1400);
+  for (let i = 0; i < 6; i++) { spawnC('ADP', 1150, 1560); spawnC('Pi', 1150, 1560); }
+  for (let i = 0; i < 22; i++) { const [x, y] = freeSpot('mat', 18, 18, 240, 1580); mkProton(x, y, 'mat'); }
+
+  if (mode === 'single') {
+    mkCarrier('NADH', 300, 800);
+    setSpeed(.6);
+  } else {
+    for (let i = 0; i < 10; i++) spawnC('NADH', 240, 1000);
+    for (let i = 0; i < 2; i++) spawnC('FADH2', 400, 900);
+    if (mode === 'steady') for (let i = 0; i < 40; i++) { const [x, y] = freeSpot('ims', 18, 18, 260, 1560); mkProton(x, y, 'ims'); }
+    if (S.speed === .6) setSpeed(1);
+  }
+  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === mode));
+  renderExpect();
+}
+
+/* ---------------- physics ---------------- */
+function collideRects(o, hw, hh) {
+  for (const r of RECTS) {
+    if (o.x + hw <= r[0] || o.x - hw >= r[2] || o.y + hh <= r[1] || o.y - hh >= r[3]) continue;
+    const pl = o.x + hw - r[0], pr = r[2] - (o.x - hw), pt = o.y + hh - r[1], pb = r[3] - (o.y - hh);
+    const m = Math.min(pl, pr, pt, pb);
+    if (m === pl) { o.x -= pl; o.vx = -Math.abs(o.vx) * .6; }
+    else if (m === pr) { o.x += pr; o.vx = Math.abs(o.vx) * .6; }
+    else if (m === pt) { o.y -= pt; o.vy = -Math.abs(o.vy) * .6; }
+    else { o.y += pb; o.vy = Math.abs(o.vy) * .6; }
+  }
+}
+function bounce(o, x0, x1, y0, y1) {
+  if (o.x < x0) { o.x = x0; o.vx = Math.abs(o.vx) * .6; } else if (o.x > x1) { o.x = x1; o.vx = -Math.abs(o.vx) * .6; }
+  if (o.y < y0) { o.y = y0; o.vy = Math.abs(o.vy) * .6; } else if (o.y > y1) { o.y = y1; o.vy = -Math.abs(o.vy) * .6; }
+}
+function carrierBounds(k) {
+  const hw = k.w / 2, hh = k.h / 2;
+  if (k.comp === 'mat') bounce(k, hw + 4, W - hw - 4, Y.imBot + hh + 3, H - hh - 4);
+  else if (k.comp === 'ims') bounce(k, 690, 1320, Y.imsTop + hh + 4, 322); // cyt c rides just above the complexes
+  else bounce(k, 280, 1010, Y.imTop + hh + 5, Y.imBot - hh - 5);
+}
+const frozen = k => (k.type === 'Q' && !S.flags.Q) || (k.type === 'cyt' && !S.flags.C);
+
+function supplied(c) {
+  if (!S.flags[c.id]) return false;
+  if (c.e.length || c.incoming) return true;
+  const want = c.id === 'I' ? 'NADH' : 'FADH2';
+  return carriers.some(k => k.type === want);
+}
+// Where each carrier is trying to go. weak = attracted but the spot is taken (queues up nearby).
+function want(k) {
+  const f = S.flags, d = (dk, ok) => ok ? { d: dk, weak: !!dk.occ && dk.occ !== k } : null;
+  switch (k.type) {
+    case 'NADH': return d(DK.nadh, f.I);
+    case 'FADH2': return d(DK.fadh, f.II);
+    case 'O2': return d(DK.o2, f.IV);
+    case 'ADP': return d(DK.adp, f.ATP);
+    case 'Pi': return d(DK.pi, f.ATP);
+    case 'cyt': return k.e.length ? d(DK.cIV, f.IV) : d(DK.cIII, f.III);
+    case 'Q': {
+      if (k.e.length === 2) return d(DK.qIII, f.III);
+      let best = null, bd = 1e9;
+      for (const [dk, c] of [[DK.qI, CX.I], [DK.qII, CX.II]]) {
+        if (dk.occ || !supplied(c)) continue;
+        const dd = dist(k.x, k.y, dk.x, dk.y); if (dd < bd) { bd = dd; best = dk; }
+      }
+      return best ? { d: best, weak: false } : null;
+    }
+  }
+  return null;
+}
+function dockTo(k, d) { d.occ = k; k.dock = d; k.dockT = 0; k.wait = 0; k.hopCd = 0; }
+function undock(k, vx, vy) { if (k.dock) k.dock.occ = null; k.dock = null; k.cool = .7; k.vx = vx; k.vy = vy; }
+
+function updCarrier(k, h) {
+  k.life += h; if (k.cool > 0) k.cool -= h;
+  if (k.fading) { k.alpha -= h * 1.4; if (k.alpha <= 0) k.dead = true; }
+  if (k.dock) { const a = 1 - Math.exp(-14 * h); k.x += (k.dock.x - k.x) * a; k.y += (k.dock.y - k.y) * a; k.dockT += h; return; }
+  if (frozen(k)) { k.vx *= .85; k.vy *= .85; k.x += k.vx * h; k.y += k.vy * h; carrierBounds(k); return; }
+  const P = PHYS[k.comp], sq = Math.sqrt(h);
+  k.vx += P.sig * sq * gauss(); k.vy += P.sig * sq * gauss();
+  if (k.cool <= 0) {
+    const w = want(k);
+    if (w) {
+      const dx = w.d.x - k.x, dy = w.d.y - k.y, dd = Math.hypot(dx, dy) || 1;
+      const a = P.att * (w.weak ? .35 : 1) * (dd < 140 && !w.weak ? 2.2 : 1) * (k.type === 'ADP' || k.type === 'Pi' ? 1.8 : 1);
+      k.vx += a * dx / dd * h; k.vy += a * dy / dd * h;
+      if (!w.weak && dd < 24 && !w.d.occ) dockTo(k, w.d);
+    } else if (k.type === 'Q') k.vx += (640 - k.x) * .25 * h;
+    else if (k.type === 'cyt') k.vx += (1000 - k.x) * .2 * h;
+  }
+  const damp = Math.exp(-P.gam * h); k.vx *= damp; k.vy *= damp;
+  k.x += k.vx * h; k.y += k.vy * h;
+  if (k.comp === 'mat') collideRects(k, k.w / 2, k.h / 2);
+  carrierBounds(k);
+}
+function repel() {
+  for (let i = 0; i < carriers.length; i++) {
+    const a = carriers[i]; if (a.dock || a.comp !== 'mat') continue; // CoQ and cyt c slide past each other (3D)
+    for (let j = i + 1; j < carriers.length; j++) {
+      const b = carriers[j]; if (b.dock || a.comp !== b.comp) continue;
+      const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || .01, m = (Math.max(a.w, a.h) + Math.max(b.w, b.h)) * .42;
+      if (d < m) { const p = (m - d) * .5, ux = dx / d, uy = dy / d; a.x -= ux * p; a.y -= uy * p; b.x += ux * p; b.y += uy * p; }
+    }
+  }
+}
+
+/* ---------------- electrons ---------------- */
+function hop(e, to, E1, dur, arc, done) { e.state = 'hop'; e.host = null; e.hop = { fx: e.x, fy: e.y, to, t: 0, dur, E0: e.E, E1, arc, done }; }
+function updHop(e, h) {
+  const p = e.hop; p.t += h / p.dur; const t = clamp(p.t, 0, 1), s = ease(t), [tx, ty] = p.to();
+  e.x = lerp(p.fx, tx, s); e.y = lerp(p.fy, ty, s) - Math.sin(t * Math.PI) * p.arc; e.E = lerp(p.E0, p.E1, t);
+  if (t >= 1) { e.hop = null; p.done(e); }
+}
+
+/* ---------------- protons ---------------- */
+function requestProtons(getter, n, cb) {
+  const [tx, ty] = getter();
+  const free = protons.filter(p => p.state === 'free' && p.comp === 'mat').sort((a, b) => dist(a.x, a.y, tx, ty) - dist(b.x, b.y, tx, ty));
+  for (let i = 0; i < n; i++) {
+    let p = free[i];
+    if (!p || dist(p.x, p.y, tx, ty) > 320) p = mkProton(tx + rand(-30, 30), Math.max(ty + 40, Y.imBot + 16), 'mat', true);
+    p.state = 'absorb'; p.tgt = getter; p.cb = cb; p.spd = 120;
+  }
+}
+function tryPump(c, h) {
+  const rate = 40 * clamp((S.CAP - S.nIMS) / 25, 0, 1);
+  if (Math.random() > 1 - Math.exp(-rate * h)) return false;
+  const ch = c.channels[c.chan++ % c.channels.length], [x0, y0] = ch;
+  let best = null, bd = 260;
+  for (const p of protons) if (p.state === 'free' && p.comp === 'mat') { const d = dist(p.x, p.y, x0, y0); if (d < bd) { bd = d; best = p; } }
+  if (!best) best = mkProton(x0 + rand(-14, 14), y0 + 22, 'mat', true);
+  best.state = 'pumpIn'; best.ch = ch; best.spd = 160; S.nIMS++;
+  return true;
+}
+function releaseIMS(x, y) { const p = mkProton(x, y, 'ims'); p.vy = -170; p.vx = rand(-50, 50); p.glow = 1; S.pumped++; }
+
+function updProton(p, h) {
+  if (p.alpha < 1 && p.state !== 'fadeOut') p.alpha = Math.min(1, p.alpha + h * 3);
+  if (p.glow) p.glow = Math.max(0, p.glow - h * 1.2);
+  switch (p.state) {
+    case 'free': {
+      const P = PHYS.prot, sq = Math.sqrt(h);
+      p.vx += P.sig * sq * gauss(); p.vy += P.sig * sq * gauss();
+      if (p.comp === 'ims') {
+        if (S.flags.ATP) { // drawn toward the ATP synthase entrance
+          const ex = SY.cx - SY.R, ey = SY.yTop, dx = ex - p.x, dy = ey - p.y, d = Math.hypot(dx, dy) || 1;
+          const a = d < 320 ? 280 : 110; p.vx += a * dx / d * h; p.vy += a * dy / d * h;
+          if (d < 34 && !SY.stair[0]) { SY.stair[0] = p; p.state = 'stairIn'; p.spd = 420; return; }
+        }
+        if (S.flags.DNP && p.y > Y.imTop - 40 && Math.random() < 1 - Math.exp(-4 * h)) {
+          p.state = 'leak'; p.t = 0; p.y0 = p.y; p.vx = 0; return;
+        }
+      }
+      const damp = Math.exp(-P.gam * h); p.vx *= damp; p.vy *= damp;
+      p.x += p.vx * h; p.y += p.vy * h;
+      collideRects(p, 9, 9);
+      if (p.comp === 'ims') bounce(p, 9, W - 9, Y.imsTop + 10, Y.imTop - 10);
+      else bounce(p, 9, W - 9, Y.imBot + 10, H - 10);
+      break;
+    }
+    case 'pumpIn': case 'absorb': case 'stairIn': {
+      const [tx, ty] = p.state === 'pumpIn' ? [p.ch[0], p.ch[1]] : p.state === 'absorb' ? p.tgt() : [spiral(0).x, spiral(0).y];
+      const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
+      p.spd = Math.min(420, (p.spd || 150) + 600 * h);
+      const st = p.spd * h;
+      if (d <= st + 1) {
+        p.x = tx; p.y = ty;
+        if (p.state === 'pumpIn') { p.state = 'channel'; p.t = 0; p.glow = 1; }
+        else if (p.state === 'absorb') { p.dead = true; p.cb && p.cb(); }
+        else p.state = 'stair';
+      } else { p.x += dx / d * st; p.y += dy / d * st; }
+      break;
+    }
+    case 'channel': {
+      p.t += h / .5; const t = clamp(p.t, 0, 1);
+      p.y = lerp(p.ch[1], p.ch[2], ease(t)); p.x = p.ch[0] + Math.sin(t * 18) * 3; p.glow = 1;
+      if (t >= 1) { p.state = 'free'; p.comp = 'ims'; p.vy = -190; p.vx = rand(-60, 60); S.pumped++; }
+      break;
+    }
+    case 'leak': {
+      p.t += h / .6; const t = clamp(p.t, 0, 1); p.y = lerp(p.y0, Y.imBot + 14, t); p.glow = .6;
+      if (t >= 1) { p.state = 'free'; p.comp = 'mat'; p.vy = 90; }
+      break;
+    }
+    case 'fadeOut': p.alpha -= h * 2; if (p.alpha <= 0) p.dead = true; break;
+  }
+}
+
+/* ---------------- docks: carriers hand electrons to complexes ---------------- */
+function donorDock(d, c, from, to, nH, h) {
+  const k = d.occ; if (!k) return;
+  if (k.type !== from) { if (!k.e.length) undock(k, rand(-50, 50), 120); return; }
+  if (k.dockT < .25 || !S.flags[c.id]) { k.wait += h; return; }
+  k.hopCd -= h;
+  if (k.e.length && k.hopCd <= 0 && c.e.length + c.incoming < 2) {
+    const e = k.e.shift(); c.incoming++; k.hopCd = .35;
+    hop(e, () => c.path[0], c.eIn, .3, 6, () => { c.incoming--; e.state = 'path'; e.prog = 0; e.host = c; c.e.push(e); c.lastFlow = S.t; });
+    if (!k.e.length) {
+      setType(k, to); k.regen = rand(3, 7);
+      for (let i = 0; i < nH; i++) { const p = mkProton(k.x + rand(-14, 14), k.y + 16, 'mat'); p.vy = 100; }
+      addText(k.x, k.y + 34, `${from === 'NADH' ? 'NADH' : 'FADH₂'} → ${to === 'NAD' ? 'NAD⁺' : 'FAD'}`, c.color);
+      undock(k, rand(-60, 60), 130);
+    }
+  }
+}
+function protonate(q) { q.Hpend += 2; requestProtons(() => [q.x, q.y + 8], 2, () => { q.H++; q.Hpend--; }); }
+function qDonorSite(d, c, h) {
+  const q = d.occ; if (!q) return;
+  if (q.e.length === 2 && q.H >= 2) { undock(q, 110, rand(-20, 20)); S.lastQ = S.t; return; }
+  const supplying = c.e.length || c.incoming || (c.id === 'I' ? DK.nadh.occ : DK.fadh.occ);
+  if (!supplying && !q.incoming && !q.Hpend) { q.wait += h; if (q.wait > 2.5) undock(q, rand(-70, 70), 0); }
+  else q.wait = 0;
+}
+function dockLogic(h) {
+  donorDock(DK.nadh, CX.I, 'NADH', 'NAD', 1, h);
+  donorDock(DK.fadh, CX.II, 'FADH2', 'FAD', 2, h);
+  qDonorSite(DK.qI, CX.I, h); qDonorSite(DK.qII, CX.II, h);
+  // QH2 → Complex III (Qo site): each electron also releases one of QH2's protons into the IMS
+  const q = DK.qIII.occ;
+  if (q) {
+    if (!q.e.length && !q.incoming) { q.H = 0; undock(q, rand(-110, -50), 0); S.lastQ = S.t; }
+    else if (q.dockT > .25 && S.flags.III && S.flags.Q) {
+      q.hopCd -= h;
+      if (q.e.length && q.hopCd <= 0 && CX.III.e.length + CX.III.incoming < 2) {
+        const e = q.e.shift(); CX.III.incoming++; q.hopCd = .45;
+        hop(e, () => CX.III.path[0], CX.III.eIn, .3, 4, () => { CX.III.incoming--; e.state = 'path'; e.prog = 0; e.host = CX.III; CX.III.e.push(e); CX.III.lastFlow = S.t; });
+        if (q.H > 0) { q.H--; releaseIMS(820, 334); }
+        S.lastQ = S.t;
+      }
+    }
+  }
+  // Cyt c → Complex IV
+  const k = DK.cIV.occ;
+  if (k) {
+    if (!k.e.length && !k.incoming) undock(k, rand(-60, -20), -90);
+    else if (k.e.length && k.dockT > .2 && S.flags.IV && S.flags.C && CX.IV.e.length + CX.IV.incoming < 2) {
+      const e = k.e.shift(); CX.IV.incoming++;
+      hop(e, () => CX.IV.path[0], CX.IV.eIn, .3, 4, () => { CX.IV.incoming--; e.state = 'path'; e.prog = 0; e.host = CX.IV; CX.IV.e.push(e); CX.IV.lastFlow = S.t; });
+      undock(k, rand(-60, -20), -90); S.lastC = S.t;
+    }
+  }
+  const k3 = DK.cIII.occ; if (k3 && k3.e.length && !k3.incoming) undock(k3, 40, -90);
+}
+
+/* ---------------- complexes ---------------- */
+function deliver(c) {
+  const e = c.e[0]; if (!e || e.prog < 1 || c.charge >= .999) return false;
+  if (c.id === 'I' || c.id === 'II') {
+    const q = DK[c.id === 'I' ? 'qI' : 'qII'].occ;
+    if (!q || !S.flags.Q || q.type !== 'Q' || q.dockT < .2 || q.e.length + q.incoming >= 2) return false;
+    c.e.shift(); q.incoming++;
+    hop(e, () => [q.x, q.y], EN.Q, .3, 8, () => { q.incoming--; attach(e, q); if (q.e.length === 2) protonate(q); S.lastQ = S.t; });
+  } else if (c.id === 'III') {
+    const k = DK.cIII.occ;
+    if (!k || !S.flags.C || k.e.length + k.incoming >= 1 || k.dockT < .15) return false;
+    c.e.shift(); k.incoming++;
+    hop(e, () => [k.x, k.y], EN.C, .3, 10, () => { k.incoming--; attach(e, k); S.lastC = S.t; undock(k, rand(30, 80), -90); });
+  } else {
+    const i = c.slots.findIndex((s, j) => !s && !c.res[j]); if (i < 0) return false;
+    c.e.shift(); c.res[i] = true; const sp = c.slotPos[i];
+    hop(e, () => sp, EN.slot, .3, 0, () => { c.res[i] = false; c.slots[i] = e; e.state = 'slot'; e.x = sp[0]; e.y = sp[1]; });
+  }
+  c.lastFlow = S.t; return true;
+}
+function updComplex(c, h) {
+  c.pulse *= Math.exp(-4 * h);
+  let moved = false;
+  if (S.flags[c.id]) {
+    // Excitation ("charge") builds as electrons drop in energy; each full unit pumps one H+.
+    if (c.charge >= .999 && c.channels.length && tryPump(c, h)) { c.charge = Math.max(0, c.charge - 1); c.pulse = 1; moved = true; }
+    const span = c.eIn - c.eOut, kc = c.ppe / span;
+    for (let i = 0; i < c.e.length; i++) {
+      const e = c.e[i], limit = i > 0 ? c.e[i - 1].prog - .2 : 1;
+      if (c.charge < .999 && e.prog < limit) {
+        const np = Math.min(limit, e.prog + h / c.transit);
+        if (np > e.prog) { c.charge += (np - e.prog) * span * kc; e.prog = np; moved = true; }
+      }
+    }
+    if (deliver(c)) moved = true;
+  }
+  for (const e of c.e) { const pt = pathPt(c, e.prog); e.x = pt[0]; e.y = pt[1]; e.E = lerp(c.eIn, c.eOut, e.prog); }
+  const target = Math.min(1.3, c.charge * .85 + c.pulse * .55 + (moved && c.e.length ? .18 : 0));
+  c.ex += (target - c.ex) * (1 - Math.exp(-8 * h));
+  if ((c.e.length || (c.id === 'IV' && c.slots.some(Boolean))) && !moved) c.stallT += h; else c.stallT = 0;
+  if (c.id === 'IV' && c.rx) c.stallT = 0;
+}
+function ivReact() {
+  const c = CX.IV, o = DK.o2.occ;
+  if (c.rx || !S.flags.IV || !c.slots[0] || !c.slots[1] || !o || o.dockT < .25) return;
+  c.rx = true; let n = 0; const es = [c.slots[0], c.slots[1]]; c.slots = [null, null];
+  es.forEach((e, i) => hop(e, () => [o.x + (i ? 9 : -9), o.y - 2], EN.O2, .45, 6, () => {
+    e.state = 'held';
+    if (++n === 2) requestProtons(() => [o.x, o.y], 2, () => { if (++o.Hgot === 2) finishWater(o, es); });
+  }));
+}
+function finishWater(o, es) {
+  const w = mkCarrier('H2O', o.x, o.y + 30); w.vy = 110;
+  es.forEach(e => attach(e, w));
+  S.h2o++; S.o2used += .5; S.lastRx = S.t; o.Hgot = 0;
+  addRing(o.x, o.y, COL.O2); addText(o.x, o.y + 54, '½O₂ + 2e⁻ + 2H⁺ → H₂O', COL.O2);
+  if (o.type === 'O2') setType(o, 'O'); else { DK.o2.occ = null; o.dead = true; }
+  CX.IV.rx = false;
+}
+
+/* ---------------- ATP synthase ---------------- */
+function updSynth(h) {
+  const adp = DK.adp.occ, pi = DK.pi.occ;
+  if (SY.tick >= 0) {
+    SY.tick += h / SY.tickDur;
+    if (SY.tick >= 1) {
+      SY.tick = -1;
+      const out = SY.stair[SY.K - 1];
+      for (let i = SY.K - 1; i > 0; i--) SY.stair[i] = SY.stair[i - 1];
+      SY.stair[0] = null;
+      if (out) { const s = spiral(SY.K); out.x = s.x - 6; out.y = s.y + 6; out.state = 'free'; out.comp = 'mat'; out.vx = rand(-120, -50); out.vy = rand(10, 60); }
+      SY.steps++; SY.lastTick = S.t;
+      if (SY.steps % SY.perATP === 0 && adp && pi) {
+        adp.dead = pi.dead = true; DK.adp.occ = DK.pi.occ = null;
+        const a = mkCarrier('ATP', 1431, 750); a.vy = 130; a.vx = rand(-30, 30);
+        S.atp++; S.atpLog.push(S.t);
+        addRing(1431, 740, COL.ATP); addText(1431, 790, '+ATP', COL.ATP, 18);
+      }
+    }
+  } else if (S.flags.ATP && SY.stair[0] && SY.stair[0].state === 'stair') {
+    // the rotor can turn freely until the step that forms ATP, which needs ADP + Pi in place
+    const ready = adp && pi && adp.dockT > .2 && pi.dockT > .2;
+    if (ready || SY.steps % SY.perATP !== SY.perATP - 1) SY.tick = 0;
+  }
+  const tk = SY.tick >= 0 ? ease(SY.tick) : 0;
+  SY.stair.forEach((p, i) => { if (p && p.state === 'stair') { const s = spiral(i + tk); p.x = s.x; p.y = s.y; p.z = s.z; } });
+  SY.ex += ((SY.tick >= 0 ? .7 : 0) - SY.ex) * (1 - Math.exp(-6 * h));
+}
+const squeeze = () => (DK.adp.occ && DK.pi.occ) ? ((SY.steps % SY.perATP) + (SY.tick >= 0 ? ease(SY.tick) : 0)) / SY.perATP : 0;
+
+/* ---------------- supply / bookkeeping ---------------- */
+function every(key, period, h, fn) { S.timers[key] = (S.timers[key] || 0) + h; if (S.timers[key] >= period) { S.timers[key] = 0; fn(); } }
+function supply(h) {
+  const f = S.flags, count = t => carriers.filter(k => k.type === t && !k.dead).length;
+  if (f.ADP) {
+    if (count('ADP') < 6) every('adp', .3, h, () => mkCarrier('ADP', rand(1300, 1570), H - 20));
+    if (count('Pi') < 6) every('pi', .3, h, () => mkCarrier('Pi', rand(1300, 1570), H - 20));
+  }
+  if (f.O2 && count('O2') + count('O') < 3) every('o2', .8, h, () => mkCarrier('O2', rand(950, 1350), H - 20));
+  if (S.mode === 'steady' && f.KREBS) for (const k of carriers) {
+    if (k.type !== 'NAD' && k.type !== 'FAD') continue;
+    k.regen -= h;
+    if (k.regen <= 0) {
+      const t = k.type === 'NAD' ? 'NADH' : 'FADH2'; setType(k, t);
+      for (let i = 0; i < 2; i++) { const e = mkE(EN[t]); attach(e, k); e.x = k.x; e.y = k.y; }
+      addText(k.x, k.y - 26, 'Krebs cycle', t === 'NADH' ? COL.I : COL.II, 12);
+    }
+  }
+  for (const k of carriers) {
+    if ((k.type === 'ATP' && k.life > 3.2) || (k.type === 'H2O' && k.life > 4)) k.fading = true;
+  }
+  // The matrix is buffered: keep a modest pool of free H+ there
+  const mat = protons.filter(p => p.state === 'free' && p.comp === 'mat');
+  if (mat.length < 16) every('hin', .12, h, () => mkProton(rand(240, 1580), H - 14, 'mat', true));
+  else if (mat.length > 34) every('hout', .1, h, () => { const p = mat.find(p => p.y > 790); if (p) p.state = 'fadeOut'; });
+}
+function step(h) {
+  S.t += h;
+  S.nIMS = protons.reduce((n, p) => n + (p.comp === 'ims' && p.state === 'free' || p.state === 'pumpIn' || p.state === 'channel' ? 1 : 0), 0);
+  supply(h);
+  for (const k of carriers) updCarrier(k, h);
+  repel();
+  dockLogic(h);
+  for (const c of CHAIN) updComplex(c, h);
+  ivReact();
+  updSynth(h);
+  for (const p of protons) updProton(p, h);
+  for (const e of electrons) if (e.state === 'hop') updHop(e, h);
+  for (const k of carriers) {
+    const n = k.e.length;
+    k.e.forEach((e, i) => { e.x = k.x + (i - (n - 1) / 2) * 17; e.y = k.y - k.h / 2 - 3; e.E = k.type === 'H2O' ? 0 : EN[k.type === 'cyt' ? 'C' : k.type] ?? e.E; e.alpha = k.alpha; if (k.dead) e.dead = true; });
+  }
+  for (const f of fx) f.t += h;
+  fx = fx.filter(f => f.t < f.dur);
+  if (carriers.some(k => k.dead)) carriers = carriers.filter(k => !k.dead);
+  if (protons.some(p => p.dead)) protons = protons.filter(p => !p.dead);
+  if (electrons.some(e => e.dead)) electrons = electrons.filter(e => !e.dead);
+}
+function addText(x, y, text, color, size = 13) { fx.push({ kind: 'text', x, y, text, color, size, t: 0, dur: 1.6 }); }
+function addRing(x, y, color) { fx.push({ kind: 'ring', x, y, color, t: 0, dur: .7 }); }
+
+/* ============================================================
+   Rendering
+   ============================================================ */
+const cvs = document.getElementById('scene'), ctx = cvs.getContext('2d');
+const bg = document.createElement('canvas'), bgx = bg.getContext('2d');
+let scale = 1, dpr = 1, dark = false;
+const mq = matchMedia('(prefers-color-scheme: dark)');
+const SCENE = {
+  light: { cyto: ['#4a5263', '#6c6878'], ims: ['#9c8e9b', '#ecd8dc'], mat: ['#fbecee', '#fdf5f4'], head: '#9b6f7b', tail: '#bf9fa8', label: '#2a1f29', soft: '#6a5464', base: '#ffffff', ink: '#2b2230', pfill: '#f2eef2', pstroke: '#6f6672', ptext: '#2c2530' },
+  dark: { cyto: ['#07080d', '#14141f'], ims: ['#1c1520', '#2b1d29'], mat: ['#1d1319', '#120c10'], head: '#86606d', tail: '#4d3944', label: '#f2e6ec', soft: '#b6a0ad', base: '#1a131b', ink: '#f1e8ee', pfill: '#2e2733', pstroke: '#a99fb0', ptext: '#f1eaf4' }
+};
+let P = SCENE.light;
+const FONT = '"Outfit", system-ui, sans-serif';
+const protonSprite = document.createElement('canvas');
+
+function themeDark() { const t = document.documentElement.dataset.theme; return t ? t === 'dark' : mq.matches; }
+function resize() {
+  const r = cvs.getBoundingClientRect(); dpr = Math.min(2, window.devicePixelRatio || 1);
+  cvs.width = Math.round(r.width * dpr); cvs.height = Math.round(r.width * 9 / 16 * dpr);
+  scale = cvs.width / W; buildBg();
+}
+function buildBg() {
+  dark = themeDark(); P = dark ? SCENE.dark : SCENE.light;
+  bg.width = cvs.width; bg.height = cvs.height;
+  const g = bgx; g.setTransform(scale, 0, 0, scale, 0, 0);
+  const band = (y0, y1, c) => { const gr = g.createLinearGradient(0, y0, 0, y1); gr.addColorStop(0, c[0]); gr.addColorStop(1, c[1]); g.fillStyle = gr; g.fillRect(0, y0, W, y1 - y0); };
+  band(0, Y.omTop, P.cyto); band(Y.omTop, Y.omBot, [P.cyto[1], P.ims[0]]); band(Y.imsTop, Y.imTop, P.ims); band(Y.imTop, Y.imBot, [P.ims[1], P.mat[0]]); band(Y.imBot, H, P.mat);
+  bilayer(g, Y.omTop, Y.omBot, 15); bilayer(g, Y.imTop, Y.imBot, 17);
+  g.fillStyle = dark ? P.label : '#f5eef2'; g.font = `600 24px ${FONT}`; g.textBaseline = 'middle';
+  g.fillText('Cytoplasm', 24, 30);
+  g.fillStyle = P.label;
+  const lab = (t, y, size = 22) => { g.font = `600 ${size}px ${FONT}`; t.split('\n').forEach((l, i) => { g.lineWidth = 5; g.strokeStyle = dark ? 'rgba(0,0,0,.5)' : 'rgba(255,255,255,.55)'; g.strokeText(l, 24, y + i * 26); g.fillText(l, 24, y + i * 26); }); };
+  lab('Outer membrane', 89, 20); lab('Intermembrane\nspace', 156); lab('Inner\nmembrane', 428); lab('Mitochondrial\nmatrix', 545);
+  // proton sprite
+  const s = 2 * dpr * scale * 1.2, R = 11; protonSprite.width = protonSprite.height = Math.ceil(2 * (R + 2) * s);
+  const p = protonSprite.getContext('2d'); p.setTransform(s, 0, 0, s, 0, 0); p.clearRect(0, 0, 40, 40);
+  p.beginPath(); p.arc(R + 2, R + 2, R, 0, 6.283); p.fillStyle = P.pfill; p.fill(); p.lineWidth = 1.6; p.strokeStyle = P.pstroke; p.stroke();
+  p.fillStyle = P.ptext; p.font = `600 11px ${FONT}`; p.textAlign = 'center'; p.textBaseline = 'middle'; p.fillText('H', R + 0.5, R + 3); p.font = `600 8px ${FONT}`; p.fillText('+', R + 7.5, R - 1);
+  protonSprite.s = s; protonSprite.R = R;
+}
+function bilayer(g, y0, y1, step) {
+  const r = step * .42, th = (y1 - y0) / 2 - r * 2 - 2;
+  g.strokeStyle = P.tail; g.lineWidth = 1.3;
+  for (let x = step / 2; x < W; x += step) {
+    for (const [hy, dir] of [[y0 + r + 1, 1], [y1 - r - 1, -1]]) {
+      for (const off of [-r * .4, r * .4]) {
+        g.beginPath(); g.moveTo(x + off, hy + dir * r);
+        for (let i = 1; i <= 6; i++) g.lineTo(x + off + Math.sin(i * 1.7 + x) * 1.6, hy + dir * (r + th * i / 6));
+        g.stroke();
+      }
+    }
+  }
+  g.fillStyle = P.head;
+  for (let x = step / 2; x < W; x += step) for (const hy of [y0 + r + 1, y1 - r - 1]) { g.beginPath(); g.arc(x, hy, r, 0, 6.283); g.fill(); }
+}
+
+function roundPoly(g, pts, r) {
+  const n = pts.length; g.beginPath();
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const start = mid(pts[n - 1], pts[0]); g.moveTo(...start);
+  for (let i = 0; i < n; i++) { const p = pts[i], q = pts[(i + 1) % n]; g.arcTo(p[0], p[1], ...mid(p, q), r); }
+  g.closePath();
+}
+function compFill(color, ex = 0) { return dark ? mix(color, '#120c12', Math.max(.25, .62 - ex * .3)) : mix(color, '#ffffff', Math.max(.35, .74 - ex * .35)); }
+function shakeOf(ex, seed) { const a = ex * 3.2; return [a * Math.sin(S.t * 53 + seed), a * Math.cos(S.t * 47 + seed * 2)]; }
+function hatch(g, color) { g.save(); g.clip(); g.strokeStyle = color; g.lineWidth = 2; g.globalAlpha = .35; for (let x = 0; x < W; x += 12) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x - 900, 900); g.stroke(); } g.restore(); }
+
+function drawComplex(c) {
+  const g = ctx, on = S.flags[c.id], [sx, sy] = on ? shakeOf(c.ex, c.color.length + c.id.length) : [0, 0];
+  g.save(); g.translate(sx, sy);
+  roundPoly(g, c.poly, c.round);
+  if (on && c.ex > .05) { g.shadowColor = c.color; g.shadowBlur = 40 * c.ex; }
+  g.fillStyle = on ? compFill(c.color, c.ex) : (dark ? '#2a252b' : '#dcd6d9'); g.fill();
+  g.shadowBlur = 0; g.lineWidth = 3; g.strokeStyle = on ? c.color : (dark ? '#5b5360' : '#9b9298');
+  if (!on) g.setLineDash([8, 6]); g.stroke(); g.setLineDash([]);
+  if (!on) { roundPoly(g, c.poly, c.round); hatch(g, dark ? '#ff6b78' : '#d23c4a'); }
+  // proton channels and electron route (cofactors)
+  g.globalAlpha = on ? .35 : .15; g.strokeStyle = c.color; g.lineWidth = 2; g.setLineDash([3, 6]);
+  for (const ch of c.channels) { g.beginPath(); g.moveTo(ch[0], ch[1] - 14); g.lineTo(ch[0], ch[2] + 14); g.stroke(); }
+  g.setLineDash([]); g.globalAlpha = on ? .5 : .2;
+  for (const pt of c.path) { g.beginPath(); g.arc(pt[0], pt[1], 4.5, 0, 6.283); g.fillStyle = dark ? mix(c.color, '#ffffff', .2) : mix(c.color, '#000000', .2); g.fill(); }
+  g.globalAlpha = 1;
+  if (c.id === 'IV') for (const [x, y] of c.slotPos) { g.beginPath(); g.arc(x, y, 12, 0, 6.283); g.strokeStyle = c.color; g.lineWidth = 2; g.globalAlpha = .55; g.stroke(); g.globalAlpha = 1; }
+  g.fillStyle = on ? (dark ? mix(c.color, '#ffffff', .35) : mix(c.color, '#000000', .45)) : (dark ? '#8c8290' : '#6f666c');
+  g.font = `800 38px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(c.id, ...c.label);
+  g.restore();
+}
+
+function drawSynthase() {
+  const g = ctx, on = S.flags.ATP, cx = SY.cx, col = on ? COL.ATP : (dark ? '#5b5360' : '#9b9298');
+  const fill = on ? compFill(COL.ATP, SY.ex * .6) : (dark ? '#2a252b' : '#dcd6d9');
+  const ang = (SY.steps + (SY.tick >= 0 ? ease(SY.tick) : 0)) * (2 * Math.PI / SY.K);
+  g.save();
+  if (on && SY.ex > .05) { g.shadowColor = COL.ATP; g.shadowBlur = 30 * SY.ex; }
+  // peripheral stalk (stator) + a-subunit
+  g.fillStyle = fill; g.strokeStyle = col; g.lineWidth = 2.5;
+  roundPoly(g, [[1494, 412], [1508, 412], [1508, 640], [1494, 640]], 6); g.fill(); g.stroke();
+  roundPoly(g, [[1360, 386], [1386, 386], [1386, 500], [1360, 500]], 8); g.fill(); g.stroke();
+  // central stalk (gamma)
+  roundPoly(g, [[1420, 498], [1440, 498], [1440, 600], [1420, 600]], 6); g.fill(); g.stroke();
+  // F1 head: alpha/beta lobes
+  for (const [x, shade] of [[1384, 0], [1478, 0], [1431, 1]]) {
+    g.beginPath(); g.ellipse(x, 650, 40, 64, 0, 0, 6.283);
+    g.fillStyle = on ? (shade ? compFill(COL.ATP, .25) : fill) : fill; g.fill(); g.stroke();
+  }
+  g.shadowBlur = 0;
+  // Fo c-ring cylinder with rotating stripes
+  roundPoly(g, [[1384, 380], [1476, 380], [1476, 506], [1384, 506]], 14); g.fillStyle = fill; g.fill(); g.stroke();
+  g.save(); roundPoly(g, [[1384, 380], [1476, 380], [1476, 506], [1384, 506]], 14); g.clip();
+  for (let k = 0; k < 10; k++) {
+    const ph = k * Math.PI / 5 + ang, z = Math.cos(ph); if (z <= 0) continue;
+    const x = cx + 44 * Math.sin(ph); g.globalAlpha = .2 + .5 * z; g.strokeStyle = col; g.lineWidth = 3 + 5 * z;
+    g.beginPath(); g.moveTo(x, 384); g.lineTo(x, 502); g.stroke();
+  }
+  g.restore(); g.globalAlpha = 1;
+  if (!on) { roundPoly(g, [[1348, 380], [1512, 380], [1512, 716], [1348, 716]], 30); hatch(g, dark ? '#ff6b78' : '#d23c4a'); }
+  // rotating arrow + eccentric cam on gamma
+  g.strokeStyle = on ? (dark ? '#c9f5d9' : '#174d2c') : col; g.lineWidth = 3;
+  g.beginPath(); g.ellipse(cx, 668, 26, 12, 0, ang, ang + 4.4); g.stroke();
+  const ax = cx + 26 * Math.cos(ang + 4.4), ay = 668 + 12 * Math.sin(ang + 4.4), ta = ang + 4.4 + Math.PI / 2;
+  g.beginPath(); g.moveTo(ax + 9 * Math.cos(ta), ay + 4 * Math.sin(ta)); g.lineTo(ax - 7 * Math.cos(ta - .9), ay - 7 * Math.sin(ta - .9)); g.lineTo(ax - 7 * Math.cos(ta + .9), ay - 7 * Math.sin(ta + .9)); g.closePath(); g.fillStyle = g.strokeStyle; g.fill();
+  g.beginPath(); g.arc(cx + 12 * Math.sin(ang), 560 + 3 * Math.cos(ang), 6, 0, 6.283); g.fill();
+  g.fillStyle = on ? (dark ? '#d8f7e3' : '#14432a') : col; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = `800 25px ${FONT}`; g.fillText('ATP', cx, 620); g.font = `700 21px ${FONT}`; g.fillText('synthase', cx, 643);
+  g.font = `600 13px ${FONT}`; g.globalAlpha = .7; g.fillText('Fo', 1372, 516); g.globalAlpha = 1;
+  g.restore();
+}
+function drawStairGuide(front) {
+  const g = ctx; g.save();
+  for (let i = 0; i <= SY.K; i++) {
+    const s = spiral(i); if ((s.z >= 0) !== front) continue;
+    g.globalAlpha = front ? .28 : .14; g.strokeStyle = dark ? '#c9f5d9' : '#1f7a45'; g.lineWidth = 2;
+    const t = spiral(i + .45); g.beginPath(); g.moveTo(s.x, s.y + 9); g.lineTo(t.x, s.y + 9); g.stroke();
+  }
+  g.restore();
+}
+
+const LABEL = { NADH: 'NADH', NAD: 'NAD⁺', FADH2: 'FADH₂', FAD: 'FAD', O2: 'O₂', O: 'O', H2O: 'H₂O', ADP: 'ADP', Pi: 'Pᵢ', ATP: 'ATP', cyt: 'Cyt c' };
+const CCOL = { NADH: COL.I, NAD: '#a07656', FADH2: COL.II, FAD: '#a5606f', Q: COL.Q, cyt: COL.C, O2: COL.O2, O: COL.O2, H2O: '#56b4e9', ADP: '#58a872', Pi: '#b4874f', ATP: '#16a34a' };
+function drawCarrier(k) {
+  const g = ctx, c = CCOL[k.type], off = frozen(k);
+  let x = k.x, y = k.y;
+  if (k.dock === DK.adp || k.dock === DK.pi) { // ADP and Pi are pressed together as the rotor turns
+    const s = squeeze(); x += (k.dock === DK.adp ? 1 : -1) * s * 16; const j = s * 2.5; x += j * Math.sin(S.t * 60); y += j * Math.cos(S.t * 52);
+  }
+  const empty = (k.type === 'Q' && !k.e.length) || (k.type === 'cyt' && !k.e.length) || k.type === 'NAD' || k.type === 'FAD';
+  g.save(); g.globalAlpha = k.alpha;
+  if (k.type === 'ATP') { g.shadowColor = COL.ATP; g.shadowBlur = 18; }
+  const r = k.h / 2;
+  roundPoly(g, [[x - k.w / 2, y - r], [x + k.w / 2, y - r], [x + k.w / 2, y + r], [x - k.w / 2, y + r]], k.type === 'cyt' ? 18 : r);
+  g.fillStyle = off ? (dark ? '#2a252b' : '#dcd6d9') : dark ? mix(c, '#120c12', empty ? .72 : .5) : mix(c, '#ffffff', empty ? .8 : .55);
+  g.fill(); g.shadowBlur = 0;
+  g.lineWidth = empty ? 2 : 2.6; g.strokeStyle = off ? (dark ? '#5b5360' : '#9b9298') : c; if (off) g.setLineDash([5, 4]); g.stroke(); g.setLineDash([]);
+  let label = LABEL[k.type];
+  if (k.type === 'Q') label = k.e.length === 2 && k.H >= 2 ? 'QH₂' : k.e.length ? 'Q•' : 'Q';
+  g.fillStyle = off ? (dark ? '#8c8290' : '#6f666c') : dark ? mix(c, '#ffffff', .45) : mix(c, '#000000', .55);
+  g.font = `700 ${k.type === 'cyt' ? 17 : 15}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(label, x, y + 1);
+  g.restore();
+}
+function ehue(E) { return 55 - 205 * (1 - clamp(E, 0, 1)); }
+function drawElectron(e) {
+  const g = ctx, E = e.E, amp = 6.5 * Math.pow(E, 1.4), f = 18 + 42 * E;
+  const x = e.x + amp * (Math.sin(S.t * f + e.ph1) * .6 + Math.sin(S.t * f * 1.73 + e.ph2) * .4);
+  const y = e.y + amp * (Math.cos(S.t * f * 1.1 + e.ph2) * .6 + Math.sin(S.t * f * 1.37 + e.ph1) * .4);
+  const hue = ehue(E), single = S.mode === 'single';
+  e.trail.push(x, y); const maxT = single ? 60 : 16; while (e.trail.length > maxT) e.trail.splice(0, 2);
+  g.save(); g.globalAlpha = e.alpha;
+  if (e.trail.length > 4) {
+    g.lineCap = 'round';
+    for (let i = 2; i < e.trail.length; i += 2) {
+      g.strokeStyle = `hsla(${hue},95%,${dark ? 65 : 55}%,${(i / e.trail.length) * .45})`; g.lineWidth = 3 * (i / e.trail.length) + .5;
+      g.beginPath(); g.moveTo(e.trail[i - 2], e.trail[i - 1]); g.lineTo(e.trail[i], e.trail[i + 1]); g.stroke();
+    }
+  }
+  const R = 8 + 18 * E, gr = g.createRadialGradient(x, y, 0, x, y, R);
+  gr.addColorStop(0, `hsla(${hue},100%,${dark ? 70 : 60}%,.85)`); gr.addColorStop(1, `hsla(${hue},100%,60%,0)`);
+  g.fillStyle = gr; g.beginPath(); g.arc(x, y, R, 0, 6.283); g.fill();
+  g.beginPath(); g.arc(x, y, 6.5, 0, 6.283); g.fillStyle = `hsl(${hue},90%,${dark ? 62 : 52}%)`; g.fill();
+  g.lineWidth = 1.5; g.strokeStyle = dark ? '#fff' : 'rgba(255,255,255,.95)'; g.stroke();
+  g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.moveTo(x - 3, y); g.lineTo(x + 3, y); g.stroke();
+  g.restore();
+}
+function drawProton(p) {
+  const s = protonSprite.s, R = protonSprite.R, sz = protonSprite.width / s;
+  let scl = 1, a = p.alpha;
+  if (p.state === 'stair' || p.state === 'stairIn') { const z = p.z ?? 0; scl = .82 + .22 * z; a *= .55 + .45 * (z + 1) / 2; }
+  if (p.glow) { ctx.save(); ctx.globalAlpha = p.glow * .6 * a; ctx.fillStyle = dark ? '#fff2c2' : '#ffd36b'; ctx.beginPath(); ctx.arc(p.x, p.y, 17 * scl, 0, 6.283); ctx.fill(); ctx.restore(); }
+  ctx.globalAlpha = a; const d = sz * scl; ctx.drawImage(protonSprite, p.x - d / 2, p.y - d / 2, d, d); ctx.globalAlpha = 1;
+}
+function badge(x, y, text, color) {
+  const g = ctx; g.save(); g.font = `700 13px ${FONT}`; const w = g.measureText(text).width + 18;
+  roundPoly(g, [[x - w / 2, y - 12], [x + w / 2, y - 12], [x + w / 2, y + 12], [x - w / 2, y + 12]], 12);
+  g.fillStyle = color; g.fill(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, x, y + 1); g.restore();
+}
+
+function render() {
+  const g = ctx;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(bg, 0, 0);
+  g.setTransform(scale, 0, 0, scale, 0, 0);
+  // back half of the spiral staircase, synthase body, then front half
+  drawStairGuide(false);
+  for (const p of SY.stair) if (p && p.state === 'stair' && p.z < 0) drawProton(p);
+  drawSynthase();
+  drawStairGuide(true);
+  for (const p of SY.stair) if (p && p.state === 'stair' && p.z >= 0) drawProton(p);
+  for (const c of CHAIN) drawComplex(c);
+  for (const k of carriers) drawCarrier(k);
+  for (const p of protons) if (p.state !== 'stair') drawProton(p);
+  g.globalCompositeOperation = dark ? 'lighter' : 'source-over';
+  for (const e of electrons) drawElectron(e);
+  g.globalCompositeOperation = 'source-over';
+  for (const f of fx) {
+    const t = f.t / f.dur;
+    g.save(); g.globalAlpha = 1 - t;
+    if (f.kind === 'ring') { g.strokeStyle = f.color; g.lineWidth = 4; g.beginPath(); g.arc(f.x, f.y, 10 + 60 * ease(t), 0, 6.283); g.stroke(); }
+    else { g.fillStyle = dark ? mix(f.color, '#ffffff', .3) : mix(f.color, '#000000', .25); g.font = `700 ${f.size}px ${FONT}`; g.textAlign = 'center'; g.fillText(f.text, f.x, f.y - 22 * t); }
+    g.restore();
+  }
+  for (const c of CHAIN) {
+    if (!S.flags[c.id]) badge(...c.badge, '⊘ ' + c.inhib, dark ? '#c43a4a' : '#d23c4a');
+    else if (c.stallT > 1.2) badge(...c.badge, 'STALLED', '#c27c0e');
+  }
+  if (!S.flags.ATP) badge(...SY.badge, '⊘ Inhibitor', dark ? '#c43a4a' : '#d23c4a');
+  else if (synthState() === 'stalled') badge(...SY.badge, 'NEEDS ADP', '#c27c0e');
+  if (hoverKey) outline(hoverKey);
+}
+function outline(key) {
+  const g = ctx; g.save(); g.strokeStyle = dark ? '#ffffff' : '#21171f'; g.lineWidth = 2; g.setLineDash([6, 5]); g.globalAlpha = .7;
+  if (CX[key]) { roundPoly(g, CX[key].poly.map(([x, y]) => [x, y]), CX[key].round); g.stroke(); }
+  else if (key === 'ATP') { roundPoly(g, [[1344, 360], [1516, 360], [1516, 722], [1344, 722]], 24); g.stroke(); }
+  else if (hoverCarrier) { const k = hoverCarrier; roundPoly(g, [[k.x - k.w / 2 - 5, k.y - k.h / 2 - 5], [k.x + k.w / 2 + 5, k.y - k.h / 2 - 5], [k.x + k.w / 2 + 5, k.y + k.h / 2 + 5], [k.x - k.w / 2 - 5, k.y + k.h / 2 + 5]], k.h / 2 + 5); g.stroke(); }
+  g.restore();
+}
+
+/* ============================================================
+   Status, diagnosis and UI
+   ============================================================ */
+const fuel = t => carriers.filter(k => k.type === t).length;
+function complexState(c) {
+  if (!S.flags[c.id]) return 'blocked';
+  if (c.stallT > 1.2) return 'stalled';
+  if (S.t - c.lastFlow < 2.5 || c.e.length) return 'active';
+  return 'idle';
+}
+function carrierState(flag, type, n, last) {
+  if (!S.flags[flag]) return 'blocked';
+  const loaded = carriers.some(k => k.type === type && k.e.length >= n);
+  if (loaded && S.t - last > 3) return 'stalled';
+  return S.t - last < 3 ? 'active' : 'idle';
+}
+function synthState() {
+  if (!S.flags.ATP) return 'blocked';
+  if (SY.stair[0] && S.t - SY.lastTick > 1.5) return 'stalled';
+  return S.t - SY.lastTick < 2 ? 'active' : 'idle';
+}
+function states() {
+  const noO2 = !carriers.some(k => k.type === 'O2' || k.type === 'O');
+  return {
+    NADH: [fuel('NADH') ? 'active' : 'idle', fuel('NADH') + ' left'],
+    FADH2: [fuel('FADH2') ? 'active' : 'idle', fuel('FADH2') + ' left'],
+    I: [complexState(CX.I)], II: [complexState(CX.II)], III: [complexState(CX.III)], IV: [complexState(CX.IV)],
+    Q: [carrierState('Q', 'Q', 2, S.lastQ)], C: [carrierState('C', 'cyt', 1, S.lastC)],
+    O2: [noO2 ? (S.flags.O2 ? 'idle' : 'blocked') : S.t - S.lastRx < 4 ? 'active' : 'idle', noO2 ? 'none' : ''],
+    GRAD: [S.nIMS > S.CAP * .85 ? 'stalled' : S.nIMS > 3 ? 'active' : 'idle', S.nIMS + ' H⁺'],
+    ATP: [synthState()],
+    ATPOUT: [S.atpLog.length && S.t - S.atpLog[S.atpLog.length - 1] < 4 ? 'active' : 'idle', S.atp + ' made']
+  };
+}
+const WORD = { active: 'flowing', stalled: 'backed up', blocked: 'blocked', idle: 'idle' };
+const FLOW = [
+  ['Electrons', [['NADH', 'NADH'], ['I', 'Complex I'], ['Q', 'CoQ'], ['III', 'Complex III'], ['C', 'Cyt c'], ['IV', 'Complex IV'], ['O2', 'O₂']]],
+  ['', [['FADH2', 'FADH₂'], ['II', 'Complex II'], ['Q', 'CoQ']]],
+  ['Protons', [['GRAD', 'H⁺ gradient'], ['ATP', 'ATP synthase'], ['ATPOUT', 'ATP']]]
+];
+const flowEl = document.getElementById('flow');
+flowEl.innerHTML = FLOW.map(([lab, row]) => `<div class="flow-row"><span class="lab">${lab}</span>${row.map(([k, n], i) => `${i ? '<span class="arr">→</span>' : ''}<span class="chip" data-k="${k}"><i></i>${n} <small></small></span>`).join('')}</div>`).join('');
+const chipEls = [...flowEl.querySelectorAll('.chip')];
+
+function diagnose() {
+  const f = S.flags, L = [];
+  const noO2 = !carriers.some(k => k.type === 'O2' || k.type === 'O');
+  const noADP = !carriers.some(k => k.type === 'ADP');
+  if (!f.IV) L.push(['blocked', 'Complex IV is blocked (cyanide). Electrons can’t be handed to O₂, so Cyt c stays loaded, Complex III can’t unload, CoQ fills up and Complexes I and II back up. No pumping anywhere means no fresh gradient, and ATP synthase winds down.']);
+  else if (noO2) L.push(['blocked', 'No oxygen left. Complex IV’s two electron sites fill and wait. Without a final acceptor the whole chain backs up — the same outcome as cyanide.']);
+  if (!f.C) L.push(['blocked', 'Cytochrome c is out of action. Complex III has nowhere to send electrons, so it backs up, and Complex IV and O₂ sit idle.']);
+  if (!f.III) L.push(['blocked', 'Complex III is inhibited. QH₂ piles up in the membrane while Cyt c and Complex IV starve. Both the NADH and FADH₂ routes stop, because both go through CoQ → III.']);
+  if (!f.Q) L.push(['blocked', 'CoQ is out of action. Complexes I and II can’t hand off their electrons, and everything downstream (III, Cyt c, IV) starves.']);
+  if (!f.I && !f.II) L.push(['blocked', 'Both entry points are blocked, so no electrons enter the chain at all.']);
+  else if (!f.I) L.push(['blocked', 'Complex I is inhibited. NADH can’t unload and piles up in the matrix. FADH₂ still feeds in through Complex II, so the chain limps on at lower yield (6 H⁺ per FADH₂ vs 10 per NADH).']);
+  else if (!f.II) L.push(['warn', 'Complex II is inhibited. FADH₂ accumulates, but NADH still drives the chain through Complex I, so ATP output barely drops.']);
+  if (!f.ATP) L.push(['blocked', 'ATP synthase is inhibited. Protons can’t flow back, so the gradient climbs until the pumps can’t push any more. Electron flow then stalls even though nothing in the chain itself is broken (respiratory control).']);
+  else if (!f.ADP && noADP) L.push(['blocked', 'Out of ADP and Pᵢ. ATP synthase has nothing to join, so its rotor locks, protons pile up, and the chain slows to a crawl.']);
+  if (f.DNP) L.push(['warn', 'The proton leak (uncoupler) is on. Protons leak back across the membrane without passing through ATP synthase, so the chain runs flat out and burns O₂, but the energy is lost as heat and little ATP is made.']);
+  if (!f.KREBS && S.mode === 'steady') L.push(['warn', 'Krebs cycle is off: NAD⁺ and FAD are no longer recharged, so the fuel runs out.']);
+  if (!L.length) {
+    if (!fuel('NADH') && !fuel('FADH2') && !electrons.some(e => e.state !== 'held' && !(e.host && e.host.type === 'H2O'))) L.push(['', 'All the NADH and FADH₂ has been oxidised, so the chain is idle. Add more with the buttons above.']);
+    else if (S.nIMS > S.CAP * .85) L.push(['warn', 'The proton gradient is near its maximum. Pumps struggle to push more H⁺ against it, so electrons slow down until ATP synthase drains the gradient.']);
+    else L.push(['ok', 'Running normally. Electrons fall downhill from NADH and FADH₂ to O₂, each drop energises a complex to pump H⁺, and the H⁺ flowing back through ATP synthase makes ATP.']);
+  }
+  return L;
+}
+const NAMES = { I: 'Complex I', II: 'Complex II', III: 'Complex III', IV: 'Complex IV', Q: 'CoQ', C: 'Cyt c', ATP: 'ATP synthase', GRAD: 'H⁺ gradient' };
+let lastDiag = '';
+function updateUI() {
+  const st = states();
+  for (const el of chipEls) {
+    const [s, note] = st[el.dataset.k]; el.className = 'chip ' + s;
+    el.querySelector('small').textContent = note || WORD[s];
+  }
+  const L = diagnose(), stalled = Object.keys(NAMES).filter(k => st[k][0] === 'stalled').map(k => NAMES[k]);
+  const html = L.map(([c, t]) => `<p class="${c}">${t}</p>`).join('') + (stalled.length ? `<div class="now">Backed up right now: <b>${stalled.join(', ')}</b></div>` : '');
+  if (html !== lastDiag) { document.getElementById('diag').innerHTML = html; lastDiag = html; }
+  const $ = id => document.getElementById(id);
+  $('sATP').textContent = S.atp;
+  const win = Math.min(30, S.t), recent = S.atpLog.filter(t => t > S.t - 30).length;
+  $('sRate').textContent = win > 3 ? Math.round(recent / win * 60) : '–';
+  $('sPump').textContent = S.pumped;
+  $('sO2').textContent = Number.isInteger(S.o2used) ? S.o2used : S.o2used.toFixed(1);
+  $('sH2O').textContent = S.h2o;
+  $('sNADH').textContent = `${fuel('NADH')} / ${fuel('NAD')}`;
+  $('sFAD').textContent = `${fuel('FADH2')} / ${fuel('FAD')}`;
+  $('sGrad').textContent = S.nIMS;
+  $('gradBar').style.width = Math.min(100, S.nIMS / S.CAP * 100) + '%';
+  playBtn.innerHTML = S.paused ? '▶ Play' : '❚❚ Pause'; playBtn.setAttribute('aria-label', S.paused ? 'Play' : 'Pause');
+}
+function renderExpect() {
+  const t = { steady: 'Steady state: the Krebs cycle keeps recharging NAD⁺ → NADH and FAD → FADH₂ (about 5 NADH for every FADH₂), and fresh O₂ and ADP keep arriving.',
+    glucose: 'One glucose delivers 10 NADH + 2 FADH₂. Expected: 10 × 2.5 + 2 × 1.5 = <b>28 ATP</b> from oxidative phosphorylation.',
+    single: 'A single NADH: 2 electrons, 10 H⁺ pumped → <b>2.5 ATP</b>. Two ATP form, and the last 2 H⁺ wait on the staircase for the next NADH.' }[S.mode];
+  document.getElementById('expect').innerHTML = t;
+}
+
+/* ---------- toggles ---------- */
+const TOGS = [
+  ['I', 'Complex I', 'Inhibitor', COL.I], ['II', 'Complex II', 'Inhibitor', COL.II], ['Q', 'Coenzyme Q', 'Inhibitor', COL.Q],
+  ['III', 'Complex III', 'Inhibitor', COL.III], ['C', 'Cytochrome c', 'Inhibitor', COL.C], ['IV', 'Complex IV', 'Cyanide', COL.IV],
+  ['ATP', 'ATP synthase', 'Inhibitor', COL.ATP], '—Supplies',
+  ['O2', 'O₂ supply', 'hypoxia', COL.O2], ['ADP', 'ADP + Pᵢ supply', 'no ADP', '#58a872'], ['KREBS', 'Krebs cycle recharging', 'steady state only', COL.I],
+  ['DNP', 'Proton leak (uncoupler)', 'leaks H⁺', '#d48a10', true]
+];
+const togEl = document.getElementById('togs');
+togEl.innerHTML = TOGS.map(t => typeof t === 'string' ? `<div class="togsep">${t.slice(1)}</div>` :
+  `<button class="tog${t[4] ? ' inverse' : ''}" data-k="${t[0]}" style="--c:${t[3]}" aria-pressed="true"><span class="sw"></span><span class="nm">${t[1]}</span><span class="inh">${t[2]}</span></button>`).join('');
+function syncToggles() { togEl.querySelectorAll('.tog').forEach(b => b.setAttribute('aria-pressed', !!S.flags[b.dataset.k])); }
+function toggle(k) { S.flags[k] = !S.flags[k]; syncToggles(); lastDiag = ''; }
+togEl.addEventListener('click', e => { const b = e.target.closest('.tog'); if (b) toggle(b.dataset.k); });
+document.getElementById('restore').onclick = () => { S.flags = { ...FLAG_DEFAULT }; syncToggles(); };
+
+/* ---------- controls ---------- */
+const playBtn = document.getElementById('play');
+playBtn.onclick = () => { S.paused = !S.paused; updateUI(); };
+document.getElementById('reset').onclick = () => reset();
+document.querySelectorAll('.seg button').forEach(b => b.onclick = () => reset(b.dataset.mode));
+document.getElementById('addN').onclick = () => { const k = mkCarrier('NADH', rand(250, 700), H - 30); k.vy = -80; };
+document.getElementById('addF').onclick = () => { const k = mkCarrier('FADH2', rand(450, 750), H - 30); k.vy = -80; };
+const speedIn = document.getElementById('speed'), speedOut = document.getElementById('speedOut');
+function setSpeed(v) { S.speed = v; speedIn.value = v; speedOut.textContent = v + '×'; }
+speedIn.oninput = () => setSpeed(+speedIn.value);
+document.addEventListener('keydown', e => { if (e.code === 'Space' && !/INPUT|BUTTON/.test(document.activeElement.tagName)) { e.preventDefault(); playBtn.click(); } });
+document.getElementById('egrad').style.background = `linear-gradient(90deg,${[1, .75, .5, .25, 0].map(E => `hsl(${ehue(E)},90%,55%)`).join(',')})`;
+
+/* ---------- hover / click ---------- */
+const INFO = {
+  I: ['Complex I · NADH dehydrogenase', COL.I, 'Takes 2 high-energy electrons from NADH. As each one drops through the complex’s iron–sulfur clusters it shakes the protein hard enough to pump 2 H⁺ out (4 per NADH), then hands off to CoQ.', 'Inhibitor'],
+  II: ['Complex II · Succinate dehydrogenase', COL.II, 'Accepts electrons from FADH₂. The energy drop here is tiny, so it barely gets excited and pumps no protons. That’s why FADH₂ yields less ATP than NADH.', 'Inhibitor'],
+  Q: ['Coenzyme Q (ubiquinone)', COL.Q, 'A small fat-soluble shuttle drifting inside the membrane. It collects 2 electrons, plus 2 H⁺ from the matrix, to become QH₂, carries them to Complex III, and drops its 2 H⁺ on the outside.', null],
+  III: ['Complex III · Cytochrome bc₁', COL.III, 'Takes electrons from QH₂ one at a time, releases QH₂’s protons outward and pumps one more per electron (4 H⁺ per pair). Each electron is passed to cytochrome c.', 'Inhibitor'],
+  C: ['Cytochrome c', COL.C, 'A small water-soluble protein in the intermembrane space that carries one electron at a time from Complex III to Complex IV.', null],
+  IV: ['Complex IV · Cytochrome c oxidase', COL.IV, 'Holds electrons in two sites, then gives them to oxygen, the final acceptor: ½O₂ + 2e⁻ + 2H⁺ → H₂O. That last, biggest energy drop pumps 1 H⁺ per electron and leaves the electron calm.', 'Cyanide'],
+  ATP: ['ATP synthase', COL.ATP, 'Protons flow back down their gradient by riding the Fo rotor down a spiral staircase. Each step turns the rotor 30°. Every 4 protons turn the central stalk 120°, which squeezes ADP and Pᵢ together into ATP. Without ADP the rotor locks.', 'Inhibitor'],
+  NADH: ['NADH', COL.I, 'An electron carrier made in glycolysis and the Krebs cycle. It holds 2 electrons at the highest energy in the chain and gives them to Complex I, becoming NAD⁺.', null],
+  NAD: ['NAD⁺', '#a07656', 'Spent (oxidised) NADH. In steady state the Krebs cycle recharges it back to NADH.', null],
+  FADH2: ['FADH₂', COL.II, 'An electron carrier from the Krebs cycle (succinate → fumarate). Its electrons start lower in energy and enter at Complex II, skipping Complex I’s pumps.', null],
+  FAD: ['FAD', '#a5606f', 'Spent FADH₂, waiting to be recharged by the Krebs cycle.', null],
+  O2: ['Oxygen', COL.O2, 'The final electron acceptor. It takes 4 electrons and 4 H⁺ in total to make 2 H₂O; here that happens 2 at a time.', null],
+  ADP: ['ADP + Pᵢ', '#58a872', 'The raw materials of ATP. They dock under the F₁ head and get squeezed together as the rotor turns.', null],
+  ATPm: ['ATP', COL.ATP, 'Fresh ATP. It is exported to the cytoplasm in exchange for ADP.', null],
+  H2O: ['Water', '#56b4e9', 'Where the electrons end up: at their lowest energy, bound to oxygen and hydrogen.', null],
+  H: ['Proton (H⁺)', '#8a8090', 'Pumped into the intermembrane space by Complexes I, III and IV. The crowd builds a gradient that pushes protons back through ATP synthase.', null]
+};
+const CARRIER_INFO = { NADH: 'NADH', NAD: 'NAD', FADH2: 'FADH2', FAD: 'FAD', Q: 'Q', cyt: 'C', O2: 'O2', O: 'O2', ADP: 'ADP', Pi: 'ADP', ATP: 'ATPm', H2O: 'H2O' };
+const TOGGLE_OF = { Q: 'Q', C: 'C', I: 'I', II: 'II', III: 'III', IV: 'IV', ATP: 'ATP' };
+let hoverKey = null, hoverCarrier = null;
+const tip = document.getElementById('tip'), stage = document.getElementById('stage');
+function hit(x, y) {
+  for (let i = carriers.length - 1; i >= 0; i--) { const k = carriers[i]; if (Math.abs(x - k.x) < k.w / 2 + 4 && Math.abs(y - k.y) < k.h / 2 + 4) return { key: CARRIER_INFO[k.type], k }; }
+  for (const c of CHAIN) if (c.rects.some(r => x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3])) return { key: c.id };
+  if (x >= 1344 && x <= 1516 && y >= 360 && y <= 722) return { key: 'ATP' };
+  for (const p of protons) if (Math.abs(x - p.x) < 11 && Math.abs(y - p.y) < 11) return { key: 'H' };
+  return null;
+}
+function sceneXY(ev) { const r = cvs.getBoundingClientRect(); return [(ev.clientX - r.left) * W / r.width, (ev.clientY - r.top) * H / r.height]; }
+function showInfo(key) {
+  const el = document.getElementById('inspect');
+  if (!key) { el.innerHTML = '<p>Hover or tap anything in the scene to learn what it does. Click a complex or carrier to switch it off.</p>'; return; }
+  const [t, c, d, inh] = INFO[key];
+  el.innerHTML = `<h3><i style="background:${c}"></i>${t}</h3><p>${d}</p>${inh ? `<p class="inhl">Blocked by: <b>${inh}</b>${TOGGLE_OF[key] ? ' · click it to toggle' : ''}</p>` : (TOGGLE_OF[key] ? '<p class="inhl">Click it to switch it off</p>' : '')}`;
+}
+cvs.addEventListener('pointermove', ev => {
+  const [x, y] = sceneXY(ev), h = hit(x, y);
+  hoverKey = h && !h.k ? h.key : (h && h.k ? 'carrier' : null); hoverCarrier = h && h.k || null;
+  if (h && h.key !== 'H') {
+    const sr = stage.getBoundingClientRect();
+    tip.textContent = INFO[h.key][0] + (TOGGLE_OF[h.key] ? ' · click to ' + (S.flags[TOGGLE_OF[h.key]] ? 'block' : 'restore') : '');
+    tip.style.left = (ev.clientX - sr.left + stage.scrollLeft) + 'px'; tip.style.top = (ev.clientY - sr.top) + 'px'; tip.style.opacity = 1;
+  } else tip.style.opacity = 0;
+  cvs.style.cursor = h && TOGGLE_OF[h.key] ? 'pointer' : 'default';
+  if (h) showInfo(h.key);
+});
+cvs.addEventListener('pointerleave', () => { hoverKey = hoverCarrier = null; tip.style.opacity = 0; });
+cvs.addEventListener('click', ev => { const h = hit(...sceneXY(ev)); if (h) { showInfo(h.key); if (TOGGLE_OF[h.key]) toggle(TOGGLE_OF[h.key]); } });
+
+/* ---------- loop ---------- */
+let last = performance.now(), acc = 0, uiT = 0;
+const HSTEP = 1 / 120;
+function frame(now) {
+  const dt = Math.min(.1, (now - last) / 1000); last = now;
+  if (!S.paused) { acc += dt * S.speed; let n = 0; while (acc >= HSTEP && n < 60) { step(HSTEP); acc -= HSTEP; n++; } if (n === 60) acc = 0; }
+  render();
+  uiT += dt; if (uiT > .2) { uiT = 0; updateUI(); }
+  requestAnimationFrame(frame);
+}
+new ResizeObserver(resize).observe(cvs);
+mq.addEventListener('change', buildBg);
+document.fonts && document.fonts.ready.then(buildBg);
+resize(); reset('steady'); syncToggles(); showInfo(null); updateUI();
+requestAnimationFrame(frame);
+// test hook
+window.__etc = { S, CX, SY, DK, step, reset, get carriers() { return carriers; }, get protons() { return protons; }, get electrons() { return electrons; } };
+</script>
+</body>
+</html>
