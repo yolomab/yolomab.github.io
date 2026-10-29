@@ -478,8 +478,9 @@ function updProton(p, h) {
   switch (p.state) {
     case 'free': {
       if (p.drag) { followPointer(p, h); if (p.comp === 'ims') bounce(p, 9, W - 9, Y.imsTop + 10, Y.imTop - 10); else bounce(p, 9, W - 9, Y.imBot + 10, H - 10); break; }
-      const P = PHYS.prot, sq = Math.sqrt(h);
-      p.vx += P.sig * sq * gauss(); p.vy += P.sig * sq * gauss();
+      const P = PHYS.prot, sq = Math.sqrt(h), flying = p.fling > 0;
+      if (flying) p.fling -= h;
+      const jit = flying ? .15 : 1; p.vx += P.sig * jit * sq * gauss(); p.vy += P.sig * jit * sq * gauss();
       if (p.comp === 'ims') {
         if (S.flags.ATP) { // drawn toward the ATP synthase entrance
           const ex = SY.cx - SY.R, ey = SY.yTop, dx = ex - p.x, dy = ey - p.y, d = Math.hypot(dx, dy) || 1;
@@ -490,7 +491,7 @@ function updProton(p, h) {
           p.state = 'leak'; p.t = 0; p.y0 = p.y; p.vx = 0; return;
         }
       }
-      const damp = Math.exp(-P.gam * h); p.vx *= damp; p.vy *= damp;
+      const damp = Math.exp(-(flying ? .5 : P.gam) * h); p.vx *= damp; p.vy *= damp;
       p.x += p.vx * h; p.y += p.vy * h;
       collideRects(p, 9, 9);
       if (p.comp === 'ims') bounce(p, 9, W - 9, Y.imsTop + 10, Y.imTop - 10);
@@ -651,7 +652,10 @@ function updSynth(h) {
       const out = SY.stair[SY.K - 1];
       for (let i = SY.K - 1; i > 0; i--) SY.stair[i] = SY.stair[i - 1];
       SY.stair[0] = null;
-      if (out) { const s = spiral(SY.K); out.x = s.x - 6; out.y = s.y + 6; out.state = 'free'; out.comp = 'mat'; out.vx = rand(-120, -50); out.vy = rand(10, 60); }
+      if (out) { // fling it back toward the complexes, angled under Complex IV, so the pumps can reuse it
+        const s = spiral(SY.K); out.x = s.x - 6; out.y = s.y + 6; out.state = 'free'; out.comp = 'mat';
+        out.vx = rand(-640, -460); out.vy = -out.vx * rand(.38, .52); out.fling = .7; out.glow = .9;
+      }
       SY.steps++; SY.lastTick = S.t;
       if (SY.steps % SY.perATP === 0 && adp && pi) {
         adp.dead = pi.dead = true; DK.adp.occ = DK.pi.occ = null;
