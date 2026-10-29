@@ -457,7 +457,7 @@ function requestProtons(getter, n, cb) {
   for (let i = 0; i < n; i++) {
     let p = free[i];
     if (!p || dist(p.x, p.y, tx, ty) > 320) p = mkProton(tx + rand(-30, 30), Math.max(ty + 40, Y.imBot + 16), 'mat', true);
-    p.state = 'absorb'; p.tgt = getter; p.cb = cb; p.spd = 120;
+    p.state = 'absorb'; p.tgt = getter; p.cb = cb; p.spd = 120; p.fly = 0;
   }
 }
 function tryPump(c, h) {
@@ -467,7 +467,7 @@ function tryPump(c, h) {
   let best = null, bd = 260;
   for (const p of protons) if (p.state === 'free' && p.comp === 'mat' && !p.drag) { const d = dist(p.x, p.y, x0, y0); if (d < bd) { bd = d; best = p; } }
   if (!best) best = mkProton(x0 + rand(-14, 14), y0 + 22, 'mat', true);
-  best.state = 'pumpIn'; best.ch = ch; best.spd = 160; S.nIMS++;
+  best.state = 'pumpIn'; best.ch = ch; best.spd = 160; best.fly = 0; S.nIMS++;
   return true;
 }
 function releaseIMS(x, y) { const p = mkProton(x, y, 'ims'); p.vy = -170; p.vx = rand(-50, 50); p.glow = 1; S.pumped++; }
@@ -478,9 +478,9 @@ function updProton(p, h) {
   switch (p.state) {
     case 'free': {
       if (p.drag) { followPointer(p, h); if (p.comp === 'ims') bounce(p, 9, W - 9, Y.imsTop + 10, Y.imTop - 10); else bounce(p, 9, W - 9, Y.imBot + 10, H - 10); break; }
-      const P = PHYS.prot, sq = Math.sqrt(h), flying = p.fling > 0;
-      if (flying) p.fling -= h;
-      const jit = flying ? .15 : 1; p.vx += P.sig * jit * sq * gauss(); p.vy += P.sig * jit * sq * gauss();
+      const P = PHYS.prot, sq = Math.sqrt(h), flying = p.fly > 0 && p.comp === 'mat';
+      if (flying) { p.fly -= Math.hypot(p.vx, p.vy) * h; if (p.fly <= 0) { p.vx *= .25; p.vy *= .25; } }
+      else { p.vx += P.sig * sq * gauss(); p.vy += P.sig * sq * gauss(); }
       if (p.comp === 'ims') {
         if (S.flags.ATP) { // drawn toward the ATP synthase entrance
           const ex = SY.cx - SY.R, ey = SY.yTop, dx = ex - p.x, dy = ey - p.y, d = Math.hypot(dx, dy) || 1;
@@ -491,8 +491,9 @@ function updProton(p, h) {
           p.state = 'leak'; p.t = 0; p.y0 = p.y; p.vx = 0; return;
         }
       }
-      const damp = Math.exp(-(flying ? .5 : P.gam) * h); p.vx *= damp; p.vy *= damp;
+      if (!flying) { const damp = Math.exp(-P.gam * h); p.vx *= damp; p.vy *= damp; }
       p.x += p.vx * h; p.y += p.vy * h;
+      if (flying && p.y > FLOOR) { p.y = 2 * FLOOR - p.y; p.vy = -Math.abs(p.vy); } // clean bounce off the matrix floor
       collideRects(p, 9, 9);
       if (p.comp === 'ims') bounce(p, 9, W - 9, Y.imsTop + 10, Y.imTop - 10);
       else bounce(p, 9, W - 9, Y.imBot + 10, H - 10);
@@ -652,10 +653,7 @@ function updSynth(h) {
       const out = SY.stair[SY.K - 1];
       for (let i = SY.K - 1; i > 0; i--) SY.stair[i] = SY.stair[i - 1];
       SY.stair[0] = null;
-      if (out) { // fling it back toward the complexes, angled under Complex IV, so the pumps can reuse it
-        const s = spiral(SY.K); out.x = s.x - 6; out.y = s.y + 6; out.state = 'free'; out.comp = 'mat';
-        out.vx = rand(-640, -460); out.vy = -out.vx * rand(.38, .52); out.fling = .7; out.glow = .9;
-      }
+      if (out) { const s = spiral(SY.K); out.x = s.x - 6; out.y = s.y + 6; out.state = 'free'; out.comp = 'mat'; fling(out); }
       SY.steps++; SY.lastTick = S.t;
       if (SY.steps % SY.perATP === 0 && adp && pi) {
         adp.dead = pi.dead = true; DK.adp.occ = DK.pi.occ = null;
@@ -672,6 +670,19 @@ function updSynth(h) {
   const tk = SY.tick >= 0 ? ease(SY.tick) : 0;
   SY.stair.forEach((p, i) => { if (p && p.state === 'stair') { const s = spiral(i + tk); p.x = s.x; p.y = s.y; p.z = s.z; } });
   SY.ex += ((SY.tick >= 0 ? .7 : 0) - SY.ex) * (1 - Math.exp(-6 * h));
+}
+// Protons leaving the rotor are thrown back toward a random complex so it can reuse them.
+// Each target: where to land (under the complex) and how often to bank the shot off the floor
+// of the matrix. Complexes I-III sit behind Complex IV, so those shots always bank.
+const FLING = [[330, 540, 1], [600, 640, 1], [870, 600, 1], [1198, 612, .3]];
+const FLOOR = H - 10;
+function fling(p) {
+  const [tx, y, bankChance] = FLING[Math.floor(Math.random() * FLING.length)];
+  const ty = Math.random() < bankChance ? 2 * FLOOR - y : y; // aim at the target's mirror image below the floor
+  const dx = tx - p.x, dy = ty - p.y, D = Math.hypot(dx, dy), spd = rand(520, 780);
+  p.vx = dx / D * spd; p.vy = dy / D * spd;
+  p.fly = D * rand(.85, 1.1); // throw strength varies: sometimes a little short, sometimes a little long
+  p.glow = .9;
 }
 const squeeze = () => (DK.adp.occ && DK.pi.occ) ? ((SY.steps % SY.perATP) + (SY.tick >= 0 ? ease(SY.tick) : 0)) / SY.perATP : 0;
 
