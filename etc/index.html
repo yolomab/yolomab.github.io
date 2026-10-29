@@ -229,32 +229,34 @@ function rgba(h, a) { const A = hex(h); return `rgba(${A[0]},${A[1]},${A[2]},${a
 /* ---------------- scene geometry ---------------- */
 const DK = {
   nadh: { x: 415, y: 641 }, fadh: { x: 600, y: 607 },
-  qI: { x: 497, y: 450 }, qII: { x: 600, y: 425 }, qIII: { x: 771, y: 446 },
-  cIII: { x: 892, y: 322 }, cIV: { x: 1104, y: 304 }, o2: { x: 1145, y: 584 },
-  adp: { x: 1402, y: 726 }, pi: { x: 1460, y: 726 }
+  qI: { x: 497, y: 450 }, qII: { x: 600, y: 425 },
+  // Complex III is a dimer: two Qo sites for QH2 and two binding sites for cytochrome c
+  qIII: { x: 771, y: 428 }, qIIIb: { x: 771, y: 462 }, cIII: { x: 838, y: 322 }, cIIIb: { x: 914, y: 322 },
+  cIV: { x: 1104, y: 304 }, o2: { x: 1145, y: 584 }
 };
 Object.values(DK).forEach(d => d.occ = null);
 
-function mkComplex(o) { return Object.assign({ e: [], incoming: 0, charge: 0, pulse: 0, ex: 0, chan: 0, lastFlow: -9, stallT: 0 }, o); }
+// cap: how many electrons a complex can carry at once
+function mkComplex(o) { return Object.assign({ cap: 3, e: [], incoming: 0, charge: 0, pulse: 0, ex: 0, chan: 0, lastFlow: -9, stallT: 0 }, o); }
 const CX = {
-  I: mkComplex({ id: 'I', name: 'Complex I', color: COL.I, inhib: 'Inhibitor', ppe: 2, transit: 1.0, eIn: .97, eOut: .70,
+  I: mkComplex({ id: 'I', name: 'Complex I', color: COL.I, inhib: 'Inhibitor', ppe: 2, transit: .6, eIn: .97, eOut: .70,
     rects: [[300, 370, 472, 502], [364, 480, 466, 624]],
     poly: [[300, 370], [472, 370], [472, 502], [466, 502], [466, 624], [364, 624], [364, 502], [300, 502]], round: 22,
     path: [[415, 620], [415, 562], [417, 506], [444, 472], [470, 452]],
     channels: [[322, 514, 356], [346, 514, 356]], label: [386, 440], badge: [415, 572] }),
-  II: mkComplex({ id: 'II', name: 'Complex II', color: COL.II, inhib: 'Inhibitor', ppe: 0, transit: .8, eIn: .695, eOut: .685,
+  II: mkComplex({ id: 'II', name: 'Complex II', color: COL.II, inhib: 'Inhibitor', ppe: 0, transit: .5, eIn: .695, eOut: .685,
     rects: [[536, 440, 664, 590]], poly: [[536, 440], [664, 440], [664, 590], [536, 590]], round: 34,
     path: [[600, 588], [600, 545], [603, 492], [600, 448]], channels: [], label: [600, 524], badge: [600, 566] }),
-  III: mkComplex({ id: 'III', name: 'Complex III', color: COL.III, inhib: 'Inhibitor', ppe: 1, transit: .9, eIn: .66, eOut: .52,
+  III: mkComplex({ id: 'III', name: 'Complex III', color: COL.III, inhib: 'Inhibitor', ppe: 1, transit: .5, eIn: .66, eOut: .52,
     rects: [[796, 344, 926, 560]], poly: [[796, 344], [926, 344], [926, 560], [796, 560]], round: 36,
     path: [[800, 446], [830, 432], [850, 394], [870, 362], [888, 346]],
     channels: [[836, 574, 332], [904, 574, 332]], label: [862, 484], badge: [862, 532] }),
-  IV: mkComplex({ id: 'IV', name: 'Complex IV', color: COL.IV, inhib: 'Cyanide', ppe: 1, transit: 1.0, eIn: .48, eOut: .22,
+  IV: mkComplex({ id: 'IV', name: 'Complex IV', color: COL.IV, inhib: 'Cyanide', ppe: 1, transit: .55, eIn: .48, eOut: .22,
     rects: [[1062, 326, 1228, 578]],
     poly: [[1088, 326], [1202, 326], [1210, 468], [1236, 556], [1196, 578], [1145, 560], [1094, 578], [1054, 556], [1080, 468]], round: 18,
     path: [[1104, 334], [1112, 388], [1124, 444], [1140, 494]],
     channels: [[1198, 594, 312]], label: [1145, 430], badge: [1145, 470],
-    slots: [null, null], res: [false, false], slotPos: [[1118, 526], [1172, 526]], rx: false })
+    slots: [null, null], res: [false, false], slotPos: [[1118, 526], [1172, 526]], rx: 0 })
 };
 const CHAIN = [CX.I, CX.II, CX.III, CX.IV];
 CHAIN.forEach(c => { c.cum = [0]; for (let i = 1; i < c.path.length; i++) c.cum.push(c.cum[i - 1] + dist(...c.path[i - 1], ...c.path[i])); });
@@ -263,6 +265,10 @@ CHAIN.forEach(c => { c.cum = [0]; for (let i = 1; i < c.path.length; i++) c.cum.
 const SY = { cx: 1430, yTop: 366, yBot: 518, R: 50, K: 12, perATP: 4, tickDur: .15,
   stair: [], tick: -1, steps: 0, lastTick: -9, ex: 0, name: 'ATP synthase', id: 'ATP', inhib: 'Inhibitor',
   rects: [[1362, 380, 1476, 506], [1420, 500, 1440, 590], [1348, 586, 1512, 716], [1494, 412, 1508, 640]], badge: [1430, 690] };
+// F1 has three catalytic sites, one under each lobe. The rotor squeezes one site at a time
+// (binding change): while the active site turns ADP + Pi into ATP, the other two load up.
+SY.sites = [1372, 1431, 1490].map((x, i) => ({ adp: DK['adp' + i] = { x, y: 728, occ: null }, pi: DK['pi' + i] = { x, y: 758, occ: null } }));
+SY.site = 0;
 const RECTS = [...CHAIN.flatMap(c => c.rects), ...SY.rects];
 function spiral(u) { const th = -Math.PI / 2 + u * (2 * Math.PI / SY.K); return { x: SY.cx + SY.R * Math.sin(th), y: lerp(SY.yTop, SY.yBot, u / SY.K), z: Math.cos(th) }; }
 
@@ -289,7 +295,7 @@ const PHYS = { prot: { sig: 330, gam: 2.4 }, mat: { sig: 130, gam: 2.0, att: 150
 function mkE(E) { const e = { id: ++eid, x: 0, y: 0, E, state: 'carrier', host: null, prog: 0, hop: null, trail: [], ph1: rand(0, 6.28), ph2: rand(0, 6.28), alpha: 1, dead: false }; electrons.push(e); return e; }
 function setType(k, t) { k.type = t; k.w = SIZES[t][0]; k.h = SIZES[t][1]; k.comp = COMP(t); }
 function mkCarrier(type, x, y) {
-  const k = { id: ++kid, x, y, vx: 0, vy: 0, e: [], H: 0, Hpend: 0, Hgot: 0, dock: null, dockT: 0, cool: 0, hopCd: 0, incoming: 0, wait: 0, life: 0, alpha: 1, fading: false, regen: 0, dead: false };
+  const k = { id: ++kid, x, y, vx: 0, vy: 0, e: [], H: 0, Hpend: 0, started: 0, done: 0, dock: null, dockT: 0, cool: 0, hopCd: 0, incoming: 0, wait: 0, life: 0, alpha: 1, fading: false, regen: 0, dead: false };
   setType(k, type);
   if (type === 'NADH' || type === 'FADH2') for (let i = 0; i < 2; i++) attach(mkE(EN[type]), k);
   carriers.push(k); return k;
@@ -311,12 +317,12 @@ function reset(mode = S.mode) {
   protons = []; carriers = []; electrons = []; fx = [];
   Object.values(DK).forEach(d => d.occ = null);
   CHAIN.forEach(c => { c.e = []; c.incoming = 0; c.charge = 0; c.pulse = 0; c.ex = 0; c.stallT = 0; c.lastFlow = -9; });
-  CX.IV.slots = [null, null]; CX.IV.res = [false, false]; CX.IV.rx = false;
-  SY.stair = new Array(SY.K).fill(null); SY.tick = -1; SY.steps = 0; SY.lastTick = -9; SY.ex = 0;
+  CX.IV.slots = [null, null]; CX.IV.res = [false, false]; CX.IV.rx = 0;
+  SY.stair = new Array(SY.K).fill(null); SY.entry = null; SY.site = 0; SY.tick = -1; SY.steps = 0; SY.lastTick = -9; SY.ex = 0;
 
-  for (let i = 0; i < 5; i++) mkCarrier('Q', rand(520, 740), rand(412, 472));
-  for (let i = 0; i < 5; i++) mkCarrier('cyt', rand(840, 1200), rand(180, 310));
-  for (let i = 0; i < 3; i++) spawnC('O2', 900, 1400);
+  for (let i = 0; i < 10; i++) mkCarrier('Q', rand(500, 760), rand(412, 472));
+  for (let i = 0; i < 9; i++) mkCarrier('cyt', rand(840, 1200), rand(180, 310));
+  for (let i = 0; i < 6; i++) spawnC('O2', 900, 1400);
   for (let i = 0; i < 6; i++) { spawnC('ADP', 1150, 1560); spawnC('Pi', 1150, 1560); }
   for (let i = 0; i < 22; i++) { const [x, y] = freeSpot('mat', 18, 18, 240, 1580); mkProton(x, y, 'mat'); }
 
@@ -370,11 +376,11 @@ function want(k) {
     case 'NADH': return d(DK.nadh, f.I);
     case 'FADH2': return d(DK.fadh, f.II);
     case 'O2': case 'O': return d(DK.o2, f.IV);
-    case 'ADP': return d(DK.adp, f.ATP);
-    case 'Pi': return d(DK.pi, f.ATP);
-    case 'cyt': return k.e.length ? d(DK.cIV, f.IV) : d(DK.cIII, f.III);
+    case 'ADP': return f.ATP ? siteDock(k, 'adp') : null;
+    case 'Pi': return f.ATP ? siteDock(k, 'pi') : null;
+    case 'cyt': return k.e.length ? d(DK.cIV, f.IV) : nearestFree(k, [DK.cIII, DK.cIIIb], f.III);
     case 'Q': {
-      if (k.e.length === 2) return d(DK.qIII, f.III);
+      if (k.e.length === 2) return nearestFree(k, [DK.qIII, DK.qIIIb], f.III);
       let best = null, bd = 1e9;
       for (const [dk, c] of [[DK.qI, CX.I], [DK.qII, CX.II]]) {
         if (dk.occ || !supplied(c)) continue;
@@ -385,13 +391,30 @@ function want(k) {
   }
   return null;
 }
+// The nearest free spot out of several; if all are taken, queue by the nearest one.
+function nearestFree(k, docks, ok) {
+  if (!ok) return null;
+  let best = null, bd = 1e9, any = null, ad = 1e9;
+  for (const d of docks) { const dd = dist(k.x, k.y, d.x, d.y); if (dd < ad) { ad = dd; any = d; } if (!d.occ && dd < bd) { bd = dd; best = d; } }
+  return best ? { d: best, weak: false } : { d: any, weak: true };
+}
+// ADP / Pi head for the active catalytic site first, then any free one; if all are taken they queue.
+function siteDock(k, kind) {
+  const act = SY.sites[SY.site][kind];
+  if (!act.occ) return { d: act, weak: false };
+  let best = null, bd = 1e9;
+  for (const st of SY.sites) { const d = st[kind]; if (!d.occ) { const dd = dist(k.x, k.y, d.x, d.y); if (dd < bd) { bd = dd; best = d; } } }
+  return best ? { d: best, weak: false } : { d: act, weak: true };
+}
 // Matrix binding spots: an occupied spot keeps everyone off it, an empty one keeps
 // out molecules that don't bind there, so the spot stays visible and reachable.
-const DOCK_FOR = { nadh: 'NADH', fadh: 'FADH2', o2: 'O2', adp: 'ADP', pi: 'Pi' };
+const DOCK_FOR = { nadh: 'NADH', fadh: 'FADH2', o2: 'O2', adp0: 'ADP', pi0: 'Pi', adp1: 'ADP', pi1: 'Pi', adp2: 'ADP', pi2: 'Pi' };
 function dockedBoxes(k) {
   const out = [];
+  const substrate = k.type === 'ADP' || k.type === 'Pi';
   for (const [key, t] of Object.entries(DOCK_FOR)) {
     const d = DK[key], o = d.occ;
+    if (substrate && (t === 'ADP' || t === 'Pi')) continue; // ADP and Pi may slip between the catalytic sites
     if (!o && k.type === t) continue;
     const [w, hh] = o ? [o.w, o.h] : SIZES[t];
     out.push([d.x - w / 2 - 6, d.y - hh / 2 - 6, d.x + w / 2 + 6, d.y + hh / 2 + 6]);
@@ -418,9 +441,9 @@ function updCarrier(k, h) {
     const w = want(k);
     if (w) {
       // a taken spot: queue a little way below it instead of crowding on top
-      const qy = w.weak && k.comp === 'mat' ? 75 : 0;
+      const qy = w.weak && k.comp === 'mat' ? (k.type === 'ADP' || k.type === 'Pi' ? 810 - w.d.y : 75) : 0;
       const dx = w.d.x - k.x, dy = w.d.y + qy - k.y, dd = Math.hypot(dx, dy) || 1;
-      const a = P.att * (w.weak ? .5 : 1) * (dd < 140 && !w.weak ? 2.2 : 1) * (k.type === 'ADP' || k.type === 'Pi' ? 1.8 : 1);
+      const a = P.att * (w.weak ? .5 : 1) * (dd < 140 && !w.weak ? 2.2 : 1) * (k.type === 'ADP' || k.type === 'Pi' || k.type === 'O2' || k.type === 'O' ? 1.8 : 1);
       k.vx += a * dx / dd * h; k.vy += a * dy / dd * h;
       if (!w.weak && dd < 24 && !w.d.occ) dockTo(k, w.d);
     } else if (k.type === 'Q') k.vx += (640 - k.x) * .25 * h;
@@ -431,13 +454,19 @@ function updCarrier(k, h) {
   if (k.comp === 'mat') { collideRects(k, k.w / 2, k.h / 2); collideRects(k, k.w / 2, k.h / 2, dockedBoxes(k)); }
   carrierBounds(k);
 }
-function repel() {
+// Soft collisions between matrix molecules: the more two overlap, the harder they push apart.
+// The NADH / FADH2 family push each other only gently, so they can slide through a crowd to their complex.
+const FUEL = new Set(['NADH', 'NAD', 'FADH2', 'FAD']);
+function repel(h) {
   for (let i = 0; i < carriers.length; i++) {
     const a = carriers[i]; if (a.dock || a.comp !== 'mat') continue; // CoQ and cyt c slide past each other (3D)
     for (let j = i + 1; j < carriers.length; j++) {
       const b = carriers[j]; if (b.dock || a.comp !== b.comp) continue;
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || .01, m = (Math.max(a.w, a.h) + Math.max(b.w, b.h)) * .42;
-      if (d < m) { const p = (m - d) * .5, ux = dx / d, uy = dy / d; a.x -= ux * p; a.y -= uy * p; b.x += ux * p; b.y += uy * p; }
+      if (d >= m) continue;
+      const k = FUEL.has(a.type) && FUEL.has(b.type) ? 25 : 90, f = k * (m - d) * h, ux = dx / d, uy = dy / d;
+      if (!a.drag) { a.vx -= ux * f; a.vy -= uy * f; }
+      if (!b.drag) { b.vx += ux * f; b.vy += uy * f; }
     }
   }
 }
@@ -457,7 +486,7 @@ function requestProtons(getter, n, cb) {
   for (let i = 0; i < n; i++) {
     let p = free[i];
     if (!p || dist(p.x, p.y, tx, ty) > 320) p = mkProton(tx + rand(-30, 30), Math.max(ty + 40, Y.imBot + 16), 'mat', true);
-    p.state = 'absorb'; p.tgt = getter; p.cb = cb; p.spd = 120; p.fly = 0;
+    p.state = 'absorb'; p.tgt = getter; p.cb = cb; p.spd = 260; p.fly = 0;
   }
 }
 function tryPump(c, h) {
@@ -485,7 +514,7 @@ function updProton(p, h) {
         if (S.flags.ATP) { // drawn toward the ATP synthase entrance
           const ex = SY.cx - SY.R, ey = SY.yTop, dx = ex - p.x, dy = ey - p.y, d = Math.hypot(dx, dy) || 1;
           const a = d < 320 ? 280 : 110; p.vx += a * dx / d * h; p.vy += a * dy / d * h;
-          if (d < 34 && !SY.stair[0]) { SY.stair[0] = p; p.state = 'stairIn'; p.spd = 420; return; }
+          if (d < 60 && (!SY.stair[0] || !SY.entry)) { if (!SY.stair[0]) SY.stair[0] = p; else SY.entry = p; p.state = 'stairIn'; p.spd = 900; return; }
         }
         if (S.flags.DNP && p.y > Y.imTop - 40 && Math.random() < 1 - Math.exp(-4 * h)) {
           p.state = 'leak'; p.t = 0; p.y0 = p.y; p.vx = 0; return;
@@ -502,7 +531,7 @@ function updProton(p, h) {
     case 'pumpIn': case 'absorb': case 'stairIn': {
       const [tx, ty] = p.state === 'pumpIn' ? [p.ch[0], p.ch[1]] : p.state === 'absorb' ? p.tgt() : [spiral(0).x, spiral(0).y];
       const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
-      p.spd = Math.min(420, (p.spd || 150) + 600 * h);
+      p.spd = Math.min(p.state === 'stairIn' ? 1200 : 650, (p.spd || 150) + 1200 * h);
       const st = p.spd * h;
       if (d <= st + 1) {
         p.x = tx; p.y = ty;
@@ -531,11 +560,11 @@ function updProton(p, h) {
 function donorDock(d, c, from, to, nH, h) {
   const k = d.occ; if (!k) return;
   if (k.type !== from) { if (!k.e.length) undock(k, rand(-50, 50), 120); return; }
-  if (k.dockT < .25 || !S.flags[c.id]) { k.wait += h; return; }
+  if (k.dockT < .08 || !S.flags[c.id]) { k.wait += h; return; }
   k.hopCd -= h;
-  if (k.e.length && k.hopCd <= 0 && c.e.length + c.incoming < 2) {
-    const e = k.e.shift(); c.incoming++; k.hopCd = .35;
-    hop(e, () => c.path[0], c.eIn, .3, 6, () => { c.incoming--; e.state = 'path'; e.prog = 0; e.host = c; c.e.push(e); c.lastFlow = S.t; });
+  if (k.e.length && k.hopCd <= 0 && c.e.length + c.incoming < c.cap) {
+    const e = k.e.shift(); c.incoming++; k.hopCd = .15;
+    hop(e, () => c.path[0], c.eIn, .18, 6, () => { c.incoming--; e.state = 'path'; e.prog = 0; e.host = c; c.e.push(e); c.lastFlow = S.t; });
     if (!k.e.length) {
       setType(k, to); k.regen = rand(3, 7);
       for (let i = 0; i < nH; i++) { const p = mkProton(k.x + rand(-14, 14), k.y + 16, 'mat'); p.vy = 100; }
@@ -557,14 +586,14 @@ function dockLogic(h) {
   donorDock(DK.fadh, CX.II, 'FADH2', 'FAD', 2, h);
   qDonorSite(DK.qI, CX.I, h); qDonorSite(DK.qII, CX.II, h);
   // QH2 → Complex III (Qo site): each electron also releases one of QH2's protons into the IMS
-  const q = DK.qIII.occ;
-  if (q) {
+  for (const q of [DK.qIII.occ, DK.qIIIb.occ]) {
+    if (!q) continue;
     if (!q.e.length && !q.incoming) { q.H = 0; undock(q, rand(-110, -50), 0); S.lastQ = S.t; }
-    else if (q.dockT > .25 && S.flags.III && S.flags.Q) {
+    else if (q.dockT > .08 && S.flags.III && S.flags.Q) {
       q.hopCd -= h;
-      if (q.e.length && q.hopCd <= 0 && CX.III.e.length + CX.III.incoming < 2) {
-        const e = q.e.shift(); CX.III.incoming++; q.hopCd = .45;
-        hop(e, () => CX.III.path[0], CX.III.eIn, .3, 4, () => { CX.III.incoming--; e.state = 'path'; e.prog = 0; e.host = CX.III; CX.III.e.push(e); CX.III.lastFlow = S.t; });
+      if (q.e.length && q.hopCd <= 0 && CX.III.e.length + CX.III.incoming < CX.III.cap) {
+        const e = q.e.shift(); CX.III.incoming++; q.hopCd = .2;
+        hop(e, () => CX.III.path[0], CX.III.eIn, .18, 4, () => { CX.III.incoming--; e.state = 'path'; e.prog = 0; e.host = CX.III; CX.III.e.push(e); CX.III.lastFlow = S.t; });
         if (q.H > 0) { q.H--; releaseIMS(820, 334); }
         S.lastQ = S.t;
       }
@@ -574,13 +603,13 @@ function dockLogic(h) {
   const k = DK.cIV.occ;
   if (k) {
     if (!k.e.length && !k.incoming) undock(k, rand(-60, -20), -90);
-    else if (k.e.length && k.dockT > .2 && S.flags.IV && S.flags.C && CX.IV.e.length + CX.IV.incoming < 2) {
+    else if (k.e.length && k.dockT > .06 && S.flags.IV && S.flags.C && CX.IV.e.length + CX.IV.incoming < CX.IV.cap) {
       const e = k.e.shift(); CX.IV.incoming++;
-      hop(e, () => CX.IV.path[0], CX.IV.eIn, .3, 4, () => { CX.IV.incoming--; e.state = 'path'; e.prog = 0; e.host = CX.IV; CX.IV.e.push(e); CX.IV.lastFlow = S.t; });
+      hop(e, () => CX.IV.path[0], CX.IV.eIn, .18, 4, () => { CX.IV.incoming--; e.state = 'path'; e.prog = 0; e.host = CX.IV; CX.IV.e.push(e); CX.IV.lastFlow = S.t; });
       undock(k, rand(-60, -20), -90); S.lastC = S.t;
     }
   }
-  const k3 = DK.cIII.occ; if (k3 && k3.e.length && !k3.incoming) undock(k3, 40, -90);
+  for (const k3 of [DK.cIII.occ, DK.cIIIb.occ]) if (k3 && k3.e.length && !k3.incoming) undock(k3, 40, -90);
 }
 
 /* ---------------- complexes ---------------- */
@@ -588,18 +617,18 @@ function deliver(c) {
   const e = c.e[0]; if (!e || e.prog < 1 || c.charge >= .999) return false;
   if (c.id === 'I' || c.id === 'II') {
     const q = DK[c.id === 'I' ? 'qI' : 'qII'].occ;
-    if (!q || !S.flags.Q || q.type !== 'Q' || q.dockT < .2 || q.e.length + q.incoming >= 2) return false;
+    if (!q || !S.flags.Q || q.type !== 'Q' || q.dockT < .06 || q.e.length + q.incoming >= 2) return false;
     c.e.shift(); q.incoming++;
-    hop(e, () => [q.x, q.y], EN.Q, .3, 8, () => { q.incoming--; attach(e, q); if (q.e.length === 2) protonate(q); S.lastQ = S.t; });
+    hop(e, () => [q.x, q.y], EN.Q, .18, 8, () => { q.incoming--; attach(e, q); if (q.e.length === 2) protonate(q); S.lastQ = S.t; });
   } else if (c.id === 'III') {
-    const k = DK.cIII.occ;
-    if (!k || !S.flags.C || k.e.length + k.incoming >= 1 || k.dockT < .15) return false;
+    const k = [DK.cIII.occ, DK.cIIIb.occ].find(k => k && k.e.length + k.incoming < 1 && k.dockT >= .06);
+    if (!k || !S.flags.C) return false;
     c.e.shift(); k.incoming++;
-    hop(e, () => [k.x, k.y], EN.C, .3, 10, () => { k.incoming--; attach(e, k); S.lastC = S.t; undock(k, rand(30, 80), -90); });
+    hop(e, () => [k.x, k.y], EN.C, .18, 10, () => { k.incoming--; attach(e, k); S.lastC = S.t; undock(k, rand(30, 80), -90); });
   } else {
     const i = c.slots.findIndex((s, j) => !s && !c.res[j]); if (i < 0) return false;
     c.e.shift(); c.res[i] = true; const sp = c.slotPos[i];
-    hop(e, () => sp, EN.slot, .3, 0, () => { c.res[i] = false; c.slots[i] = e; e.state = 'slot'; e.x = sp[0]; e.y = sp[1]; });
+    hop(e, () => sp, EN.slot, .18, 0, () => { c.res[i] = false; c.slots[i] = e; e.state = 'slot'; e.x = sp[0]; e.y = sp[1]; });
   }
   c.lastFlow = S.t; return true;
 }
@@ -611,7 +640,7 @@ function updComplex(c, h) {
     if (c.charge >= .999 && c.channels.length && tryPump(c, h)) { c.charge = Math.max(0, c.charge - 1); c.pulse = 1; moved = true; }
     const span = c.eIn - c.eOut, kc = c.ppe / span;
     for (let i = 0; i < c.e.length; i++) {
-      const e = c.e[i], limit = i > 0 ? c.e[i - 1].prog - .2 : 1;
+      const e = c.e[i], limit = i > 0 ? c.e[i - 1].prog - .15 : 1;
       if (c.charge < .999 && e.prog < limit) {
         const np = Math.min(limit, e.prog + h / c.transit);
         if (np > e.prog) { c.charge += (np - e.prog) * span * kc; e.prog = np; moved = true; }
@@ -623,48 +652,53 @@ function updComplex(c, h) {
   const target = Math.min(1.3, c.charge * .85 + c.pulse * .55 + (moved && c.e.length ? .18 : 0));
   c.ex += (target - c.ex) * (1 - Math.exp(-8 * h));
   if ((c.e.length || (c.id === 'IV' && c.slots.some(Boolean))) && !moved) c.stallT += h; else c.stallT = 0;
-  if (c.id === 'IV' && c.rx) c.stallT = 0;
+  if (c.id === 'IV' && c.rx > 0) c.stallT = 0;
 }
+// Each O atom of the bound O2 takes 2 electrons + 2 H+ to become water. The two halves can
+// run at the same time: the next electron pair goes in while the first waits for its protons.
 function ivReact() {
   const c = CX.IV, o = DK.o2.occ;
-  if (c.rx || !S.flags.IV || !c.slots[0] || !c.slots[1] || !o || o.dockT < .25) return;
-  c.rx = true; let n = 0; const es = [c.slots[0], c.slots[1]]; c.slots = [null, null];
-  es.forEach((e, i) => hop(e, () => [o.x + (i ? 9 : -9), o.y - 2], EN.O2, .45, 6, () => {
+  if (!S.flags.IV || !c.slots[0] || !c.slots[1] || !o || o.dockT < .08 || o.started >= (o.type === 'O2' ? 2 : 1) + o.done) return;
+  const side = o.started % 2 ? 1 : -1; o.started++; c.rx++;
+  let n = 0, got = 0; const es = [c.slots[0], c.slots[1]]; c.slots = [null, null];
+  es.forEach((e, i) => hop(e, () => [o.x + side * 6 + (i ? 5 : -5), o.y - 2], EN.O2, .25, 6, () => {
     e.state = 'held';
-    if (++n === 2) requestProtons(() => [o.x, o.y], 2, () => { if (++o.Hgot === 2) finishWater(o, es); });
+    if (++n === 2) requestProtons(() => [o.x, o.y], 2, () => { if (++got === 2) finishWater(o, es); });
   }));
 }
 function finishWater(o, es) {
   const w = mkCarrier('H2O', o.x, o.y + 30); w.vy = 110;
   es.forEach(e => attach(e, w));
-  S.h2o++; S.o2used += .5; S.lastRx = S.t; o.Hgot = 0;
+  S.h2o++; S.o2used += .5; S.lastRx = S.t; o.done++; CX.IV.rx--;
   addRing(o.x, o.y, COL.O2); addText(o.x, o.y + 54, '½O₂ + 2e⁻ + 2H⁺ → H₂O', COL.O2);
-  if (o.type === 'O2') setType(o, 'O'); else { DK.o2.occ = null; o.dead = true; }
-  CX.IV.rx = false;
+  if (o.type === 'O2') { setType(o, 'O'); o.started--; o.done--; } // one O atom left
+  else { if (DK.o2.occ === o) DK.o2.occ = null; o.dock = null; o.dead = true; }
 }
 
 /* ---------------- ATP synthase ---------------- */
 function updSynth(h) {
-  const adp = DK.adp.occ, pi = DK.pi.occ;
+  const site = SY.sites[SY.site], adp = site.adp.occ, pi = site.pi.occ;
   if (SY.tick >= 0) {
-    SY.tick += h / SY.tickDur;
+    // the rotor turns faster the stronger the proton gradient pushing on it
+    SY.tick += h / clamp(SY.tickDur * 60 / Math.max(S.nIMS, 1), .035, .5);
     if (SY.tick >= 1) {
       SY.tick = -1;
       const out = SY.stair[SY.K - 1];
       for (let i = SY.K - 1; i > 0; i--) SY.stair[i] = SY.stair[i - 1];
-      SY.stair[0] = null;
+      SY.stair[0] = SY.entry; SY.entry = null; // the proton waiting in the entry channel steps on
       if (out) { const s = spiral(SY.K); out.x = s.x - 6; out.y = s.y + 6; out.state = 'free'; out.comp = 'mat'; fling(out); }
       SY.steps++; SY.lastTick = S.t;
       if (SY.steps % SY.perATP === 0 && adp && pi) {
-        adp.dead = pi.dead = true; DK.adp.occ = DK.pi.occ = null;
-        const a = mkCarrier('ATP', 1431, 760); a.vy = 160; a.vx = rand(-30, 30);
+        adp.dead = pi.dead = true; site.adp.occ = site.pi.occ = null;
+        const a = mkCarrier('ATP', site.adp.x, 790); a.vy = 170; a.vx = rand(-40, 40);
         S.atp++; S.atpLog.push(S.t);
-        addRing(1431, 740, COL.ATP); addText(1431, 790, '+ATP', COL.ATP, 18);
+        addRing(site.adp.x, 743, COL.ATP); addText(site.adp.x, 805, '+ATP', COL.ATP, 18);
+        SY.site = (SY.site + 1) % SY.sites.length; // the rotor moves on to the next catalytic site
       }
     }
   } else if (S.flags.ATP && SY.stair[0] && SY.stair[0].state === 'stair') {
     // the rotor can turn freely until the step that forms ATP, which needs ADP + Pi in place
-    const ready = adp && pi && adp.dockT > .2 && pi.dockT > .2;
+    const ready = adp && pi && adp.dockT > .05 && pi.dockT > .05;
     if (ready || SY.steps % SY.perATP !== SY.perATP - 1) SY.tick = 0;
   }
   const tk = SY.tick >= 0 ? ease(SY.tick) : 0;
@@ -684,17 +718,18 @@ function fling(p) {
   p.fly = D * rand(.85, 1.1); // throw strength varies: sometimes a little short, sometimes a little long
   p.glow = .9;
 }
-const squeeze = () => (DK.adp.occ && DK.pi.occ) ? ((SY.steps % SY.perATP) + (SY.tick >= 0 ? ease(SY.tick) : 0)) / SY.perATP : 0;
+const squeeze = () => { const st = SY.sites[SY.site]; return st.adp.occ && st.pi.occ ? ((SY.steps % SY.perATP) + (SY.tick >= 0 ? ease(SY.tick) : 0)) / SY.perATP : 0; };
+const atSite = k => k.dock && SY.sites.some(st => st.adp === k.dock || st.pi === k.dock);
 
 /* ---------------- supply / bookkeeping ---------------- */
 function every(key, period, h, fn) { S.timers[key] = (S.timers[key] || 0) + h; if (S.timers[key] >= period) { S.timers[key] = 0; fn(); } }
 function supply(h) {
   const f = S.flags, count = t => carriers.filter(k => k.type === t && !k.dead).length;
   if (f.ADP) {
-    if (count('ADP') < 6) every('adp', .3, h, () => mkCarrier('ADP', rand(1300, 1570), H - 20));
-    if (count('Pi') < 6) every('pi', .3, h, () => mkCarrier('Pi', rand(1300, 1570), H - 20));
+    if (count('ADP') < 14) every('adp', .12, h, () => mkCarrier('ADP', rand(1300, 1570), H - 20));
+    if (count('Pi') < 14) every('pi', .12, h, () => mkCarrier('Pi', rand(1300, 1570), H - 20));
   }
-  if (f.O2 && count('O2') + count('O') < 3) every('o2', .8, h, () => mkCarrier('O2', rand(950, 1350), H - 20));
+  if (f.O2 && count('O2') + count('O') < 6) every('o2', .4, h, () => mkCarrier('O2', rand(950, 1350), H - 20));
   if (S.mode === 'steady' && f.KREBS) for (const k of carriers) {
     if (k.type !== 'NAD' && k.type !== 'FAD') continue;
     k.regen -= h;
@@ -717,7 +752,7 @@ function step(h) {
   S.nIMS = protons.reduce((n, p) => n + (p.comp === 'ims' && p.state === 'free' || p.state === 'pumpIn' || p.state === 'channel' ? 1 : 0), 0);
   supply(h);
   for (const k of carriers) updCarrier(k, h);
-  repel();
+  repel(h);
   dockLogic(h);
   for (const c of CHAIN) updComplex(c, h);
   ivReact();
@@ -880,13 +915,14 @@ const CCOL = { NADH: COL.I, NAD: '#a07656', FADH2: COL.II, FAD: '#a5606f', Q: CO
 function drawCarrier(k) {
   const g = ctx, c = CCOL[k.type], off = frozen(k);
   let x = k.x, y = k.y;
-  if (k.dock === DK.adp || k.dock === DK.pi) { // ADP and Pi are pressed together as the rotor turns
-    const s = squeeze(); x += (k.dock === DK.adp ? 1 : -1) * s * 16; const j = s * 2.5; x += j * Math.sin(S.t * 60); y += j * Math.cos(S.t * 52);
+  const st = SY.sites[SY.site];
+  if (k.dock === st.adp || k.dock === st.pi) { // the active site's ADP and Pi are pressed together as the rotor turns
+    const s = squeeze(); y += (k.dock === st.adp ? 1 : -1) * s * 12; const j = s * 2.5; x += j * Math.sin(S.t * 60); y += j * Math.cos(S.t * 52);
   }
   const empty = (k.type === 'Q' && !k.e.length) || (k.type === 'cyt' && !k.e.length) || k.type === 'NAD' || k.type === 'FAD';
   g.save(); g.globalAlpha = k.alpha;
   if (k.type === 'ATP') { g.shadowColor = COL.ATP; g.shadowBlur = 18; }
-  else if (k.dock === DK.adp || k.dock === DK.pi) { g.shadowColor = c; g.shadowBlur = 16; }
+  else if (atSite(k)) { g.shadowColor = c; g.shadowBlur = k.dock === st.adp || k.dock === st.pi ? 20 : 8; }
   const r = k.h / 2;
   roundPoly(g, [[x - k.w / 2, y - r], [x + k.w / 2, y - r], [x + k.w / 2, y + r], [x - k.w / 2, y + r]], k.type === 'cyt' ? 18 : r);
   g.fillStyle = off ? (dark ? '#2a252b' : '#dcd6d9') : dark ? mix(c, '#120c12', empty ? .72 : .5) : mix(c, '#ffffff', empty ? .8 : .55);
@@ -901,10 +937,10 @@ function drawCarrier(k) {
 // Dashed outlines under the F1 head show where ADP and Pi bind.
 function drawBindingSite() {
   const g = ctx;
-  for (const [d, t] of [[DK.adp, 'ADP'], [DK.pi, 'Pi']]) {
+  for (const [d, t, active] of SY.sites.flatMap((st, i) => [[st.adp, 'ADP', i === SY.site], [st.pi, 'Pi', i === SY.site]])) {
     if (d.occ) continue;
     const [w, hh] = SIZES[t], r = hh / 2;
-    g.save(); g.globalAlpha = S.flags.ATP ? .75 : .35;
+    g.save(); g.globalAlpha = !S.flags.ATP ? .3 : active ? .85 : .45;
     roundPoly(g, [[d.x - w / 2, d.y - r], [d.x + w / 2, d.y - r], [d.x + w / 2, d.y + r], [d.x - w / 2, d.y + r]], r);
     g.setLineDash([5, 4]); g.lineWidth = 2; g.strokeStyle = CCOL[t]; g.stroke();
     g.fillStyle = CCOL[t]; g.font = `700 14px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(LABEL[t], d.x, d.y + 1);
@@ -957,6 +993,7 @@ function render() {
   drawSynthase();
   drawStairGuide(true);
   for (const p of SY.stair) if (p && p.state === 'stair' && p.z >= 0) drawProton(p);
+  if (SY.entry && SY.entry.state === 'stair') drawProton(SY.entry);
   for (const c of CHAIN) drawComplex(c);
   drawBindingSite();
   for (const k of carriers) if (!k.dock) drawCarrier(k);
@@ -1140,7 +1177,7 @@ let hoverKey = null, hoverCarrier = null;
 const tip = document.getElementById('tip'), stage = document.getElementById('stage');
 let held = null, dragMoved = false, downXY = null;
 // Molecules mid-handoff can't be picked up: pulling them away would strand an electron or proton.
-function canGrab(k) { return !k.fading && !k.incoming && !k.Hpend && !(k.dock === DK.o2 && CX.IV.rx); }
+function canGrab(k) { return !k.fading && !k.incoming && !k.Hpend && !(k.dock === DK.o2 && k.started > k.done); }
 function grabAt(x, y) {
   for (let i = carriers.length - 1; i >= 0; i--) { const k = carriers[i]; if (Math.abs(x - k.x) < k.w / 2 + 6 && Math.abs(y - k.y) < k.h / 2 + 6) return canGrab(k) ? k : null; }
   for (const p of protons) if (p.state === 'free' && Math.abs(x - p.x) < 15 && Math.abs(y - p.y) < 15) return p;
